@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > so all users start with default hotkeys.
 
 ### Added
+- Dark Souls III save backup/restore support in Praxis
+- New `ds3save` module in `src/common/` providing the Praxis-runtime save API for Dark Souls III
+- New `ds3_backend` registered in the Praxis backend registry alongside the existing Elden Ring backend
+- DS3-specific selftest subcommands (`ds3-aes-known-vector`, `ds3-load-min-fixture`, `ds3-roundtrip-byte-stable`, `ds3-active-slot`, `ds3-null-guards`, `ds3-import-resigns-userid`, `ds3-real-save-load`, `ds3-real-save-classify`, `ds3-real-save-roundtrip-readonly`)
 - Praxis: Multi-profile support — game profiles (per-account/version) and backup profiles (per game) via `Praxis.ini` multi-section schema
 - Praxis: Game Profile Manager dialog (modal ListView) for managing game configurations
 - Praxis: Toolbar with backup profile combobox + Backup Full / Backup Slot / Restore / Undo Restore buttons
@@ -24,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Praxis: New `--selftest` subcommands for sorted sibling navigation, read-only toggling, read-only folder rejection, and read-only Backup & Replace rejection
 
 ### Changed (BREAKING)
+- `backend-default-save-dir` selftest now accepts a `<game_id>` argument (1 = Elden Ring, 2 = Dark Souls III)
+- `docs/DS3SaveFormatResearch.md` Steam ID width corrected from 16 bytes to 8 bytes (was a documentation error)
 - Praxis: `restore_with_safety()` renamed to `restore_safe_full()`
 - Praxis: `restore_with_safety_auto()` renamed to `restore_safe_auto()`
 - Praxis: `undo_last_restore()` renamed to `restore_safe_undo()`
@@ -55,6 +61,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Praxis: Pre-existing `.ersm` extension on raw-BND4 ring snapshots was misleading (new files now use `.sl2`)
 - Praxis: Backup & Replace now rejects read-only selected files across toolbar, hotkey, and action-layer code paths
+
+### Build
+- `ersave_common` static library now links `bcrypt` (Windows CNG) PUBLIC for AES-128-CBC used by DS3 save handling
 
 ## [1.1.0] - 2026-04-25
 

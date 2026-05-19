@@ -1,6 +1,6 @@
 # Praxis
 
-Praxis is a practice save tool for Elden Ring (and potentially other games) that allows you to quickly backup and restore save files using global hotkeys. It features a tree-structured save library and automatic ring backups to ensure you never lose progress.
+Praxis is a practice save tool for Elden Ring and Dark Souls III that allows you to quickly backup and restore save files using global hotkeys. It features a tree-structured save library and automatic ring backups to ensure you never lose progress.
 
 ## Features
 
@@ -9,7 +9,7 @@ Praxis is a practice save tool for Elden Ring (and potentially other games) that
 - **Tree-Structured Save Library** — Organize your saves in a hierarchical tree view. Rename, move, and delete saves with ease.
 - **Recycle Bin Support** — Deleted saves are moved to the Windows Recycle Bin.
 - **Ring Backup System** — Automatically maintains a 5-slot FIFO ring of backups every time you restore, allowing you to undo the last restore operation.
-- **Multi-Game Ready** — Designed with a backend interface to support multiple games (currently implements Elden Ring).
+- **Multi-Game Ready** — Designed with a backend interface to support multiple games (currently implements Elden Ring and Dark Souls III).
 
 ## Default Hotkeys
 
@@ -37,7 +37,7 @@ Refer to the root [README.md](../../README.md) for build instructions. Once buil
 
 ## Backend Interface
 
-Praxis uses a compile-time vtable (`game_backend_t`) defined in `src/Praxis/game_backend.h`. This allows the core logic to remain game-agnostic while specific backends (like `er_backend.c`) handle the details of save file locations and slot manipulation.
+Praxis uses a compile-time vtable (`game_backend_t`) defined in `src/Praxis/game_backend.h`. This allows the core logic to remain game-agnostic while specific backends (like `er_backend.c` for Elden Ring and `ds3_backend.c` for Dark Souls III) handle the details of save file locations and slot manipulation.
 
 ## Profiles
 
