@@ -29,6 +29,10 @@ typedef struct egp_state_s {
     game_profile_t *gp;
     bool is_new;
     const profile_store_t *store;   /* May be NULL when no store is available. */
+    /* Last value auto-written to the Name field. When the user changes the
+     * Game dropdown, the Name field is auto-updated only if its current text
+     * still matches this snapshot — i.e. the user has not edited it manually. */
+    wchar_t last_auto_name[64];
 } egp_state_t;
 
 /* Resolve the backend currently selected in the Game combobox. Returns NULL if
@@ -212,6 +216,10 @@ static INT_PTR CALLBACK egp_dlg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
          * backend. Must run AFTER the combobox is populated and selected. */
         egp_auto_fill_name(hwnd, state);
 
+        /* Snapshot the auto-generated Name so later CBN_SELCHANGE on the Game
+         * dropdown can detect whether the user has edited the field manually. */
+        GetDlgItemTextW(hwnd, IDC_EGP_NAME, state->last_auto_name, 64);
+
         SendMessageW(GetDlgItem(hwnd, IDC_EGP_NAME), EM_LIMITTEXT, 63, 0);
         SendMessageW(GetDlgItem(hwnd, IDC_EGP_SAVE_DIR), EM_LIMITTEXT, MAX_PATH - 1, 0);
         SendMessageW(GetDlgItem(hwnd, IDC_EGP_TREE_ROOT), EM_LIMITTEXT, MAX_PATH - 1, 0);
@@ -235,6 +243,27 @@ static INT_PTR CALLBACK egp_dlg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return FALSE;
 
     case WM_COMMAND:
+        /* Auto-refresh the Name field when the user changes the Game dropdown,
+         * but only for new profiles and only when the field still matches the
+         * last auto-generated value (i.e. the user has not edited it). */
+        if (HIWORD(wp) == CBN_SELCHANGE && LOWORD(wp) == IDC_EGP_GAME) {
+            if (state && state->is_new) {
+                wchar_t current_name[64];
+                GetDlgItemTextW(hwnd, IDC_EGP_NAME, current_name, 64);
+                if (lstrcmpW(current_name, state->last_auto_name) == 0) {
+                    const game_backend_t *backend = egp_get_selected_backend(hwnd);
+                    const wchar_t *base = (backend && backend->display_name)
+                        ? backend->display_name
+                        : praxis_locale_str(STR_PRAXIS_PROFILE);
+                    wchar_t new_name[64];
+                    if (profile_store_find_unique_game_name(state->store, base, new_name, 64)) {
+                        SetDlgItemTextW(hwnd, IDC_EGP_NAME, new_name);
+                        lstrcpynW(state->last_auto_name, new_name, 64);
+                    }
+                }
+            }
+            return TRUE;
+        }
         switch (LOWORD(wp)) {
         case IDC_EGP_BROWSE_SAVE:
             egp_browse_into(hwnd, IDC_EGP_SAVE_DIR);

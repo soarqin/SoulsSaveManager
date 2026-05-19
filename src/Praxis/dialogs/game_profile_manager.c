@@ -8,6 +8,7 @@
 #include "game_profile_manager.h"
 #include "edit_game_profile.h"
 
+#include "../backend_registry.h"
 #include "../locale.h"
 #include "../profile_store.h"
 #include "../profile_store_io.h"
@@ -75,12 +76,13 @@ static void gpm_truncate_path_for_column(HWND list, int col,
     ReleaseDC(list, hdc);
 }
 
-/* Look up the display name for a game_id_t. */
+/* Look up the display name for a game_id_t via the backend registry. */
 static const wchar_t *game_id_display_name(game_id_t gid) {
-    switch (gid) {
-    case GAME_ID_ELDEN_RING: return L"Elden Ring";
-    default:                 return praxis_locale_str(STR_PRAXIS_UNKNOWN);
+    const game_backend_t *backend = backend_registry_get_by_id(gid);
+    if (backend && backend->display_name) {
+        return backend->display_name;
     }
+    return praxis_locale_str(STR_PRAXIS_UNKNOWN);
 }
 
 /* Initialize ListView columns once on dialog creation. The two path columns
