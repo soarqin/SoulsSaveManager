@@ -34,12 +34,19 @@
 #define PRAXIS_TOAST_GREEN_DARK  RGB(0x4C, 0xD8, 0x50)
 #define PRAXIS_TOAST_GREEN_LIGHT RGB(0x2E, 0x7D, 0x32)
 
+/* Material-style error reds for failure toast border:
+ *   - Dark mode: red 400
+ *   - Light mode: red 800 */
+#define PRAXIS_TOAST_RED_DARK  RGB(0xEF, 0x53, 0x50)
+#define PRAXIS_TOAST_RED_LIGHT RGB(0xC6, 0x28, 0x28)
+
 struct praxis_toast_s {
     HWND hwnd;                              /* Toast window handle. */
     HWND parent;                            /* Parent (main) window handle. */
     HFONT font;                             /* Custom font owned by this toast. */
     wchar_t text[PRAXIS_TOAST_MAX_TEXT + 1];
     COLORREF text_color;
+    COLORREF border_color;                  /* 0 = use theme edge color (1px). */
     int width;                              /* Computed panel width in pixels. */
     int height;                             /* Computed panel height in pixels. */
 };
@@ -199,10 +206,17 @@ static void paint_toast(praxis_toast_t *t, HDC dc, const RECT *client) {
     FillRect(mem_dc, client, bg_brush);
     if (bg_owned) DeleteObject(bg_brush);
 
-    /* Draw a 1px rounded border in the theme edge color. NULL_BRUSH
-     * makes RoundRect stroke only (no fill), which matches the rounded
-     * window region applied in compute_size(). */
-    border_pen = CreatePen(PS_SOLID, 1, pal ? pal->edge : GetSysColor(COLOR_BTNSHADOW));
+    /* Draw a rounded border. Default (border_color == 0) uses the 1px
+     * theme edge color; an explicit border_color paints a 2px emphasized
+     * border (used to flag failure toasts in red). NULL_BRUSH makes
+     * RoundRect stroke only (no fill), which matches the rounded window
+     * region applied in compute_size(). */
+    {
+        COLORREF bc = t->border_color
+            ? t->border_color
+            : (pal ? pal->edge : GetSysColor(COLOR_BTNSHADOW));
+        border_pen = CreatePen(PS_SOLID, t->border_color ? 2 : 1, bc);
+    }
     old_pen = (HPEN)SelectObject(mem_dc, border_pen);
     old_brush = (HBRUSH)SelectObject(mem_dc, GetStockObject(NULL_BRUSH));
     RoundRect(mem_dc, 0, 0, w, h,
@@ -321,7 +335,7 @@ void praxis_toast_destroy(praxis_toast_t *toast) {
 }
 
 void praxis_toast_show(praxis_toast_t *toast, const wchar_t *message,
-                       COLORREF text_color, int duration_ms) {
+                       COLORREF text_color, COLORREF border_color, int duration_ms) {
     UINT duration;
 
     if (!toast || !toast->hwnd) return;
@@ -331,6 +345,7 @@ void praxis_toast_show(praxis_toast_t *toast, const wchar_t *message,
     }
     lstrcpynW(toast->text, message, PRAXIS_TOAST_MAX_TEXT + 1);
     toast->text_color = text_color;
+    toast->border_color = border_color;
     compute_size(toast);
     center_over_parent(toast);
     /* InvalidateRect ensures the new text/color paints on this same show
@@ -364,4 +379,8 @@ void praxis_toast_hide(praxis_toast_t *toast) {
 
 COLORREF praxis_toast_color_success(void) {
     return theme_core_is_dark() ? PRAXIS_TOAST_GREEN_DARK : PRAXIS_TOAST_GREEN_LIGHT;
+}
+
+COLORREF praxis_toast_color_error(void) {
+    return theme_core_is_dark() ? PRAXIS_TOAST_RED_DARK : PRAXIS_TOAST_RED_LIGHT;
 }

@@ -24,6 +24,13 @@
  */
 COLORREF praxis_toast_color_success(void);
 
+/**
+ * @brief Returns the theme-appropriate error red for toast border.
+ * @details Use as the @p border_color argument to praxis_toast_show()
+ *          for backup/restore failure notifications.
+ */
+COLORREF praxis_toast_color_error(void);
+
 /** Default visible duration in milliseconds. */
 #define PRAXIS_TOAST_DEFAULT_DURATION_MS 2000
 
@@ -57,11 +64,13 @@ void praxis_toast_destroy(praxis_toast_t *toast);
  * @param toast Toast returned by praxis_toast_create(). NULL is a no-op.
  * @param message Wide-string message to display. NULL or empty hides the panel.
  * @param text_color RGB color used for the message text.
+ * @param border_color RGB color for an emphasized 2px panel border, or 0 to use
+ *                     the theme default 1px edge color.
  * @param duration_ms Visible duration in milliseconds. Non-positive values use
  *                    PRAXIS_TOAST_DEFAULT_DURATION_MS.
  */
 void praxis_toast_show(praxis_toast_t *toast, const wchar_t *message,
-                       COLORREF text_color, int duration_ms);
+                       COLORREF text_color, COLORREF border_color, int duration_ms);
 
 /**
  * @brief Recenter the toast over the parent's client area.
