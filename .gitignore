@@ -5,6 +5,7 @@ cmake-build-*/
 
 # Agent directories
 .sisyphus/
+.omo/
 .cache/
 .agent/
 .claude/
