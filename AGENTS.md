@@ -38,9 +38,11 @@ ERSaveManager/
     └── Praxis/             # src/Praxis: Praxis executable sources
         ├── CMakeLists.txt
         ├── backends/
-        │   └── er_backend.c
+        │   ├── er_backend.c            # Elden Ring backend vtable instance
+        │   └── ds3_backend.c           # Dark Souls III backend vtable instance
         ├── bnd4_test_format.h          # BND4 selftest constants (magic bytes, offsets)
-        ├── praxis_selftest.c/h         # Selftest subcommand dispatcher
+        ├── praxis_selftest.c/h         # Selftest subcommand dispatcher (linked into PraxisSelftest only)
+        ├── selftest_main.c             # Console wmain() entry point for PraxisSelftest.exe
         ├── praxis_hotkey_actions.c/h   # Hotkey action handlers (backup/restore/undo)
         ├── praxis_main_menu.c/h        # Dynamic main menu construction
         ├── praxis_toast.c/h            # Centered, auto-fading notification panel (toast)
@@ -90,15 +92,16 @@ cmake --build build --config Debug
 ### Clean rebuild
 
 ```powershell
-Remove-Item -Recurse -Force build
-cmake -S . -B build ...
-cmake --build build --config Release
+# Build specific target
+cmake --build build --config Release --target saveman         # ERSaveManager.exe
+cmake --build build --config Release --target praxis          # Praxis.exe
+cmake --build build --config Release --target praxis_selftest # PraxisSelftest.exe
 ```
 
 ### Notes
-- There is **no automated test suite** in this repository. Verification is manual
-  (run the resulting `.exe` and exercise the UI).
-- No single-test runner command exists.
+- **`PraxisSelftest.exe`** is a standalone console executable for automated testing.
+  It is separate from `Praxis.exe` (GUI) to avoid Win32 console/stdout issues.
+  Build it with `--target praxis_selftest`; output goes to `build/bin/PraxisSelftest.exe`.
 - `CMAKE_EXPORT_COMPILE_COMMANDS=ON` is set automatically → `build/compile_commands.json`
   is generated for clangd/IDE tooling.
 
@@ -118,7 +121,37 @@ cmake --build build --config Release
 - **Backend Interface**: Compile-time vtable defined in `src/Praxis/game_backend.h`.
 - **Save Tree Sorting**: Top toolbar sort combobox supports filename ascending/descending and modified-time ascending/descending.
 - **Read-only Backups**: Save tree context menu can toggle read-only only for files. Read-only files show a locked marker; Backup & Replace is disabled for them and hotkey-triggered replacement is a no-op.
+- **Selftest executable**: `PraxisSelftest.exe` — a standalone **console** program.
+  - **Do NOT use `Praxis.exe --selftest`** — `Praxis.exe` is a Win32 GUI subsystem binary;
+    its stdout is unreliable when launched from scripts and `$LASTEXITCODE` is not set.
+  - Always use `PraxisSelftest.exe <subcommand> [args...]` directly.
+- **Invoking selftest commands (PowerShell)**:
+  ```powershell
+  & .\build\bin\PraxisSelftest.exe <subcommand> [args...]
+  # Example:
+  & .\build\bin\PraxisSelftest.exe smoke
+  & .\build\bin\PraxisSelftest.exe ds3-real-save-load "C:\path\to\DS30000.sl2"
+  ```
+  `$LASTEXITCODE` is reliable: `0` = pass, `1` = assertion failed, `2` = usage error.
+- **⚠️ DESTRUCTIVE subcommands** — these write to and then DELETE the path passed as
+  `<tmp>`. **Never pass a real save file path as `<tmp>`**; always use a throwaway path
+  under `$env:TEMP`:
+  - `ds3-load-min-fixture <tmp>` — creates fixture at `<tmp>`, asserts structure, **deletes `<tmp>`**
+  - `ds3-roundtrip-byte-stable <tmp>` — creates fixture at `<tmp>`, round-trips, **deletes `<tmp>`**
+  - `ds3-active-slot <tmp> <expected_int>` — creates fixture at `<tmp>`, checks slot, **deletes `<tmp>`**
+  - `ds3-null-guards` — creates/deletes its own tmp internally (safe)
+  - `ds3-import-resigns-userid <srcA> <dstB>` — creates fixtures at `<srcA>` and `<dstB>`, **deletes both**
+  - `ds3-real-save-roundtrip-readonly <path> <tmp_copy>` — reads `<path>` (safe), writes/deletes `<tmp_copy>`
+- **Read-only subcommands** (safe to pass real save paths):
+  - `ds3-real-save-load <path>` — load real DS3 save, print slot availability; **does not modify file**
+  - `ds3-real-save-classify <path>` — verify BND4 magic + slot count; **does not modify file**
+  - `ds3-dump-summary <path>` — print summary plaintext offsets for diagnosis; **does not modify file**
+  - `ds3-backup-slot <src_save> <slot> <dst_backup>` — backup slot from real save to new file; **does not modify `<src_save>`**
+- **Fixture-creation subcommands** (write to path, do NOT delete — safe for inspection):
+  - `provision-sl2 <output_path>` — create minimal valid ER save fixture, leave on disk
+  - `provision-ds3-sl2 <output_path>` — create minimal valid DS3 save fixture, leave on disk
 - **`--selftest` subcommands** (selected; see `praxis_selftest.c` for the full list):
+  - `smoke` — basic sanity check, prints `praxis_smoke_ok`
   - `locale-dump` — print all STR_PRAXIS_* string values
   - `profile-roundtrip <ini>` — write/reload profile store, assert byte-equal
   - `profile-load <ini>` — dump store contents
@@ -142,18 +175,18 @@ cmake --build build --config Release
   - `theme-change-classify` — verify `theme_core_is_relevant_setting_change` logic
   - `unique-game-name <ini> <base_name>` — print unique game name for the given base name
   - `ds3-aes-known-vector` — assert AES-128-CBC round-trip matches pre-computed vector
-  - `ds3-load-min-fixture <tmp>` — build programmatic DS3 fixture, load it, assert structure
-  - `ds3-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality
-  - `ds3-active-slot <tmp> <expected_int>` — assert active slot matches
+  - `ds3-load-min-fixture <tmp>` — build programmatic DS3 fixture, load it, assert structure ⚠️ destructive
+  - `ds3-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `ds3-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
   - `ds3-null-guards` — verify all 6 public ds3save functions reject NULL inputs
-  - `ds3-import-resigns-userid <srcA> <dstB>` — verify implicit Steam ID re-signing on cross-account import
+  - `ds3-import-resigns-userid <srcA> <dstB>` — verify implicit Steam ID re-signing on cross-account import ⚠️ destructive
   - `ds3-real-save-load <path>` — load real DS3 save, print structure
   - `ds3-real-save-classify <path>` — verify BND4 magic + slot count of real save
   - `ds3-real-save-roundtrip-readonly <path> <tmp_copy>` — copy real save, no-op roundtrip, assert reload OK
-- **Invoking selftest commands (PowerShell)**:
-  ```powershell
-  & .\build\bin\Release\Praxis.exe --selftest <subcommand>
-  ```
+  - `ds3-dump-summary <path>` — print ACTIVE_OFFSET / AVAILABLE_OFFSET bytes from decrypted summary for diagnosis
+  - `ds3-backup-slot <src_save> <slot> <dst_backup>` — backup one DS3 slot to a `.ds3sm` file using DS3 backend directly
+  - `provision-sl2 <output_path>` — create minimal valid ER save fixture and leave on disk
+  - `provision-ds3-sl2 <output_path>` — create minimal valid DS3 save fixture and leave on disk
 
 ---
 

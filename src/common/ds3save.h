@@ -68,3 +68,14 @@ bool ds3_char_data_serialize(const ds3_char_data_t *c, uint8_t *out, size_t out_
  * @return true if import succeeds, false otherwise
  */
 bool ds3_char_data_import_raw(ds3_save_data_t *save_data, int slot, const uint8_t *raw_data);
+
+/**
+ * @brief Diagnostic: print summary plaintext bytes around key offsets to stdout.
+ * @details Prints DS3_ACTIVE_OFFSET and DS3_AVAILABLE_OFFSET regions as hex.
+ *          For debugging only; not part of the public API.
+ */
+void ds3_save_dump_summary_offsets(const ds3_save_data_t *save_data,
+                                    uint8_t out_active[4],
+                                    uint8_t out_available[10],
+                                    int *out_first_nonzero,
+                                    uint8_t *out_first_nonzero_val);

@@ -499,3 +499,28 @@ bool ds3_char_data_import_raw(ds3_save_data_t *save_data, int slot, const uint8_
     LocalFree(mutable_copy);
     return true;
 }
+
+void ds3_save_dump_summary_offsets(const ds3_save_data_t *save_data,
+                                    uint8_t out_active[4],
+                                    uint8_t out_available[10],
+                                    int *out_first_nonzero,
+                                    uint8_t *out_first_nonzero_val) {
+    if (!save_data) return;
+
+    if (out_active) {
+        CopyMemory(out_active, save_data->summary_data.data + DS3_ACTIVE_OFFSET, 4);
+    }
+    if (out_available) {
+        CopyMemory(out_available, save_data->summary_data.data + DS3_AVAILABLE_OFFSET, 10);
+    }
+    if (out_first_nonzero) {
+        *out_first_nonzero = -1;
+        for (int i = 0; i < 0x1200 && i < (int)DS3_SUMMARY_PLAINTEXT_SIZE; i++) {
+            if (save_data->summary_data.data[i] != 0) {
+                *out_first_nonzero = i;
+                if (out_first_nonzero_val) *out_first_nonzero_val = save_data->summary_data.data[i];
+                break;
+            }
+        }
+    }
+}
