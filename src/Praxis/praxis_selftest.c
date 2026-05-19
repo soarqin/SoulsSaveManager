@@ -45,8 +45,7 @@
 #include <shlwapi.h>
 
 bool save_tree_select_sibling_file(save_tree_t *t, int direction);
-bool praxis_hotkey_action_backup_replace_selected(HWND hwnd, profile_store_t *store,
-                                                  save_tree_t *save_tree, int compression_level);
+#include "praxis_hotkey_actions.h"
 
 /* Formatted wide-char printf honoring stdout redirect set by the parent process. */
 static void st_printf(const wchar_t *fmt, ...) {
@@ -571,22 +570,10 @@ static bool selftest_parse_tree_sort_mode(const wchar_t *value, save_tree_sort_m
 }
 
 int praxis_selftest_run(int argc, wchar_t **argv) {
-    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
-    DWORD type = hOut ? GetFileType(hOut) : FILE_TYPE_UNKNOWN;
-    bool redirected = (type == FILE_TYPE_DISK || type == FILE_TYPE_PIPE);
     int exit_code;
-
-    if (!redirected) {
-        FILE *fp = NULL;
-
-        AllocConsole();
-        freopen_s(&fp, "CONOUT$", "w", stdout);
-        freopen_s(&fp, "CONOUT$", "w", stderr);
-    }
 
     if (!argv || argc < 3) {
         st_printf(L"usage: --selftest <subcommand> [args...]\n");
-        /* FreeConsole not called: selftest exits the process immediately after returning. */
         return 2;
     }
 
@@ -613,6 +600,61 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
                 exit_code = 2;
             } else {
                 exit_code = praxis_make_min_valid_sl2(argv[3], 76561199999999999ULL) ? 0 : 1;
+            }
+        } else if (wcscmp(sub, L"provision-ds3-sl2") == 0) {
+            /* Create a minimal valid DS3 fixture at <output_path> and leave it on disk. */
+            if (argc < 4) {
+                st_printf(L"usage: --selftest provision-ds3-sl2 <output_path>\n");
+                exit_code = 2;
+            } else {
+                exit_code = praxis_make_min_valid_ds3_sl2(argv[3], DS3_TEST_USERID_A) ? 0 : 1;
+            }
+        } else if (wcscmp(sub, L"ds3-backup-slot") == 0) {
+            /* Diagnose DS3 slot backup step by step.
+             * Usage: ds3-backup-slot <src_save> <slot> <dst_backup> */
+            if (argc < 6) {
+                st_printf(L"usage: --selftest ds3-backup-slot <src_save> <slot> <dst_backup>\n");
+                exit_code = 2;
+            } else {
+                int slot = _wtoi(argv[4]);
+                ds3_save_data_t *save = ds3_save_data_load(argv[3]);
+                if (!save) {
+                    st_printf(L"FAIL: step 1 ds3_save_data_load returned NULL\n");
+                    exit_code = 1;
+                } else {
+                    const ds3_char_data_t *cd = ds3_char_data_ref(save, slot);
+                    if (!cd) {
+                        st_printf(L"FAIL: step 2 ds3_char_data_ref(slot=%d) returned NULL\n", slot);
+                        ds3_save_data_free(save);
+                        exit_code = 1;
+                    } else {
+                        uint8_t *buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS3_CHAR_DATA_SERIALIZED_SIZE);
+                        if (!buf) {
+                            st_printf(L"FAIL: step 3 LocalAlloc failed\n");
+                            ds3_save_data_free(save);
+                            exit_code = 1;
+                        } else if (!ds3_char_data_serialize(cd, buf, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                            st_printf(L"FAIL: step 4 ds3_char_data_serialize failed\n");
+                            LocalFree(buf);
+                            ds3_save_data_free(save);
+                            exit_code = 1;
+                        } else {
+                            ds3_save_data_free(save);
+                            st_printf(L"OK: steps 1-4 passed, serialized %u bytes\n",
+                                (unsigned)DS3_CHAR_DATA_SERIALIZED_SIZE);
+                            bool ok = ersm_compress_to_file(argv[5], buf,
+                                DS3_CHAR_DATA_SERIALIZED_SIZE, ERSM_TYPE_CHAR_SLOT, 5);
+                            LocalFree(buf);
+                            if (!ok) {
+                                st_printf(L"FAIL: step 5 ersm_compress_to_file failed\n");
+                                exit_code = 1;
+                            } else {
+                                st_printf(L"PASS: ds3-backup-slot (slot=%d)\n", slot);
+                                exit_code = 0;
+                            }
+                        }
+                    }
+                }
             }
         } else if (wcscmp(sub, L"char-set-name-profile") == 0) {
             if (argc < 4) {
@@ -1471,7 +1513,7 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
                                 if (before_kind == SAVE_KIND_UNKNOWN) {
                                     st_printf(L"backup-replace-selected: unknown kind before replace\n");
                                     exit_code = 1;
-                                } else if (!praxis_hotkey_action_backup_replace_selected(host, &store, t, COMP_LEVEL_MEDIUM)) {
+                                } else if (praxis_hotkey_action_backup_replace_selected(host, &store, t, COMP_LEVEL_MEDIUM) != PRAXIS_ACTION_OK) {
                                     st_printf(L"backup-replace-selected: action failed\n");
                                     exit_code = 1;
                                 } else if (!save_tree_get_selected_path(t, selected_full_after, MAX_PATH)) {
@@ -1547,7 +1589,7 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
                                 _snwprintf_s(temp_path, MAX_PATH, _TRUNCATE, L"%ls.replace.tmp", selected_full);
                                 DeleteFileW(temp_path);
                                 SetFileAttributesW(selected_full, FILE_ATTRIBUTE_READONLY);
-                                if (praxis_hotkey_action_backup_replace_selected(host, &store, t, COMP_LEVEL_MEDIUM)) {
+                                if (praxis_hotkey_action_backup_replace_selected(host, &store, t, COMP_LEVEL_MEDIUM) == PRAXIS_ACTION_OK) {
                                     st_printf(L"backup-replace-selected-readonly: action should fail\n");
                                     exit_code = 1;
                                 } else if (PathFileExistsW(temp_path)) {
@@ -2354,6 +2396,34 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
 
                     ds3_save_data_free(save);
                     st_printf(L"PASS: ds3-real-save-load\n");
+                    exit_code = 0;
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-dump-summary") == 0) {
+            /* Load a real DS3 save and dump summary plaintext offsets for diagnosis. */
+            if (argc < 4) {
+                st_printf(L"Usage: ds3-dump-summary <path>\n");
+                exit_code = 1;
+            } else {
+                ds3_save_data_t *save = ds3_save_data_load(argv[3]);
+                if (!save) {
+                    st_printf(L"FAIL: ds3_save_data_load returned NULL\n");
+                    exit_code = 1;
+                } else {
+                    uint8_t active[4] = {0};
+                    uint8_t available[10] = {0};
+                    int first_nz = -1;
+                    uint8_t first_nz_val = 0;
+                    ds3_save_dump_summary_offsets(save, active, available, &first_nz, &first_nz_val);
+                    ds3_save_data_free(save);
+                    st_printf(L"ACTIVE_OFFSET(0x0FE8): %02X %02X %02X %02X  (int32=%d)\n",
+                        active[0], active[1], active[2], active[3],
+                        (int)(active[0] | (active[1]<<8) | (active[2]<<16) | (active[3]<<24)));
+                    st_printf(L"AVAILABLE_OFFSET(0x1098): %02X %02X %02X %02X %02X %02X %02X %02X %02X %02X\n",
+                        available[0], available[1], available[2], available[3], available[4],
+                        available[5], available[6], available[7], available[8], available[9]);
+                    st_printf(L"First non-zero in summary[0..0x1200]: offset=0x%X value=0x%02X\n",
+                        first_nz, first_nz_val);
                     exit_code = 0;
                 }
             }
