@@ -49,6 +49,7 @@ add_project(praxis WIN32
     dialogs/hotkey_settings.c
     dialogs/hotkey_settings.h
     backends/er_backend.c
+    backends/ds3_backend.c
     resource.h
     app.rc
     VERSION 1.0.0
