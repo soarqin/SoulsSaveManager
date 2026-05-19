@@ -135,12 +135,21 @@ cmake --build build --config Release
   - `backup-full-with-active <src> <dst>` — backup full save using the active backend, exit 0 on success
   - `backup-replace-selected-readonly <save_dir> <tree_root> <relpath>` — verify Backup & Replace rejects read-only selected files
   - `write-raw-bnd4 <src> <dst>`, `classify <file>` — save format helpers
-  - `backend-default-save-dir <game_id>` — call backend's `get_default_save_dir`; exit 0 even when no dir found
+  - `backend-default-save-dir <game_id>` — call backend's `get_default_save_dir` (1=ER, 2=DS3); exit 0 even when no dir found
   - `char-set-name-profile <save_path>` — round-trip char name set/get via ersave profile
   - `detect-system-language-debug` — print locale detection intermediate state
   - `ersave-null-guards` — verify null-guard behavior in ersave public API
   - `theme-change-classify` — verify `theme_core_is_relevant_setting_change` logic
   - `unique-game-name <ini> <base_name>` — print unique game name for the given base name
+  - `ds3-aes-known-vector` — assert AES-128-CBC round-trip matches pre-computed vector
+  - `ds3-load-min-fixture <tmp>` — build programmatic DS3 fixture, load it, assert structure
+  - `ds3-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality
+  - `ds3-active-slot <tmp> <expected_int>` — assert active slot matches
+  - `ds3-null-guards` — verify all 6 public ds3save functions reject NULL inputs
+  - `ds3-import-resigns-userid <srcA> <dstB>` — verify implicit Steam ID re-signing on cross-account import
+  - `ds3-real-save-load <path>` — load real DS3 save, print structure
+  - `ds3-real-save-classify <path>` — verify BND4 magic + slot count of real save
+  - `ds3-real-save-roundtrip-readonly <path> <tmp_copy>` — copy real save, no-op roundtrip, assert reload OK
 - **Invoking selftest commands (PowerShell)**:
   ```powershell
   & .\build\bin\Release\Praxis.exe --selftest <subcommand>
