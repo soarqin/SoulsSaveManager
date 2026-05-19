@@ -21,7 +21,9 @@
 #include "profile_store.h"
 #include "profile_store_io.h"
 #include "bnd4_test_format.h"
+#include "ds3_test_format.h"
 
+#include "../common/ds3save.h"
 #include "../common/ersave.h"
 #include "../common/save_compress.h"
 #include "../common/theme_core.h"
@@ -36,6 +38,8 @@
 #include <wchar.h>
 
 #include <windows.h>
+#include <winternl.h>
+#include <bcrypt.h>
 #include <commctrl.h>
 #include <shellapi.h>
 #include <shlwapi.h>
@@ -147,6 +151,185 @@ static bool praxis_make_min_valid_sl2(const wchar_t *path, uint64_t user_id) {
         return false;
     }
 
+    ok = WriteFile(file, file_data, total_size, &written, NULL) && written == total_size;
+    CloseHandle(file);
+    LocalFree(file_data);
+    return ok;
+}
+
+/* Creates a minimal valid DS3 BND4 save file at path with the given user ID.
+ * Builds 12 slots (10 char + 1 summary + 1 regulation) using REAL DS3 on-disk
+ * sizes, encrypting each slot's plaintext with BCrypt AES-128-CBC PKCS7 using
+ * the DS3 master key and the fixture's fixed IV. Only char slot 0 and the
+ * summary slot carry meaningful data; all other slots have all-zero plaintext.
+ *
+ * On-disk layout per slot: [16-byte MD5][16-byte IV][ciphertext].
+ * MD5 covers IV || ciphertext (DS3 convention; differs from ER which checksums
+ * plaintext directly without encryption). */
+static bool praxis_make_min_valid_ds3_sl2(const wchar_t *path, uint64_t userid) {
+    const uint32_t header_size = DS3_BND4_FILE_HEADER_SIZE;
+    const uint32_t char_size = DS3_CHAR_SLOT_ON_DISK_SIZE;
+    const uint32_t summary_size = DS3_SUMMARY_SLOT_ON_DISK_SIZE;
+    const uint32_t char_pt_size = DS3_CHAR_PLAINTEXT_SIZE;
+    const uint32_t summary_pt_size = DS3_SUMMARY_PLAINTEXT_SIZE;
+    const uint32_t char_ct_size = char_size - DS3_BND4_MD5_HEADER_SIZE - 16u;
+    const uint32_t summary_ct_size = summary_size - DS3_BND4_MD5_HEADER_SIZE - 16u;
+    const uint32_t total_size = header_size + 10u * char_size + summary_size + char_size;
+    uint8_t *file_data = NULL;
+    BCRYPT_ALG_HANDLE alg = NULL;
+    BCRYPT_KEY_HANDLE key = NULL;
+    uint8_t *key_obj = NULL;
+    ULONG key_obj_size = 0;
+    ULONG result_size = 0;
+    NTSTATUS status;
+    HANDLE file;
+    DWORD written;
+    bool ok = false;
+    int i;
+
+    file_data = (uint8_t *)LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, total_size);
+    if (!file_data) {
+        return false;
+    }
+
+    /* BND4 header */
+    CopyMemory(file_data, "BND4", 4);
+    *(uint32_t *)(file_data + DS3_BND4_SLOT_COUNT_OFFSET) = 12u;
+    for (i = 0; i < 10; i++) {
+        *(uint32_t *)(file_data + DS3_BND4_SLOT_SIZE_ARRAY_OFFSET + (uint32_t)i * DS3_BND4_SLOT_ENTRY_STRIDE) = char_size;
+        *(uint32_t *)(file_data + DS3_BND4_SLOT_OFFSET_ARRAY_OFFSET + (uint32_t)i * DS3_BND4_SLOT_ENTRY_STRIDE) = header_size + (uint32_t)i * char_size;
+    }
+    /* Slot 10: summary */
+    *(uint32_t *)(file_data + DS3_BND4_SLOT_SIZE_ARRAY_OFFSET + 10u * DS3_BND4_SLOT_ENTRY_STRIDE) = summary_size;
+    *(uint32_t *)(file_data + DS3_BND4_SLOT_OFFSET_ARRAY_OFFSET + 10u * DS3_BND4_SLOT_ENTRY_STRIDE) = header_size + 10u * char_size;
+    /* Slot 11: regulation (same on-disk size as char) */
+    *(uint32_t *)(file_data + DS3_BND4_SLOT_SIZE_ARRAY_OFFSET + 11u * DS3_BND4_SLOT_ENTRY_STRIDE) = char_size;
+    *(uint32_t *)(file_data + DS3_BND4_SLOT_OFFSET_ARRAY_OFFSET + 11u * DS3_BND4_SLOT_ENTRY_STRIDE) = header_size + 10u * char_size + summary_size;
+
+    /* BCrypt setup: AES-128-CBC with DS3 master key */
+    status = BCryptOpenAlgorithmProvider(&alg, BCRYPT_AES_ALGORITHM, NULL, 0);
+    if (!NT_SUCCESS(status)) {
+        LocalFree(file_data);
+        return false;
+    }
+    status = BCryptSetProperty(alg, BCRYPT_CHAINING_MODE, (PUCHAR)BCRYPT_CHAIN_MODE_CBC,
+                                sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
+    if (!NT_SUCCESS(status)) {
+        BCryptCloseAlgorithmProvider(alg, 0);
+        LocalFree(file_data);
+        return false;
+    }
+    status = BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH, (PUCHAR)&key_obj_size,
+                                sizeof(ULONG), &result_size, 0);
+    if (!NT_SUCCESS(status)) {
+        BCryptCloseAlgorithmProvider(alg, 0);
+        LocalFree(file_data);
+        return false;
+    }
+    key_obj = (uint8_t *)LocalAlloc(LMEM_FIXED, key_obj_size);
+    if (!key_obj) {
+        BCryptCloseAlgorithmProvider(alg, 0);
+        LocalFree(file_data);
+        return false;
+    }
+    status = BCryptGenerateSymmetricKey(alg, &key, key_obj, key_obj_size,
+                                        (PUCHAR)DS3_AES_KEY_BYTES, 16, 0);
+    if (!NT_SUCCESS(status)) {
+        LocalFree(key_obj);
+        BCryptCloseAlgorithmProvider(alg, 0);
+        LocalFree(file_data);
+        return false;
+    }
+
+    /* Encrypt each of the 12 slots */
+    ok = true;
+    for (i = 0; i < 12 && ok; i++) {
+        uint32_t slot_offset;
+        uint32_t pt_size;
+        uint32_t ct_size;
+        uint8_t *plaintext;
+        uint8_t *md5_buf;
+        uint8_t iv_scratch[16];
+        uint8_t *ct_buf;
+        ULONG ct_written = 0;
+
+        if (i < 10) {
+            slot_offset = header_size + (uint32_t)i * char_size;
+            pt_size = char_pt_size;
+            ct_size = char_ct_size;
+        } else if (i == 10) {
+            slot_offset = header_size + 10u * char_size;
+            pt_size = summary_pt_size;
+            ct_size = summary_ct_size;
+        } else {
+            slot_offset = header_size + 10u * char_size + summary_size;
+            pt_size = char_pt_size;
+            ct_size = char_ct_size;
+        }
+
+        plaintext = (uint8_t *)LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, pt_size);
+        if (!plaintext) {
+            ok = false;
+            break;
+        }
+
+        /* Populate slot-specific fields in plaintext */
+        if (i == 0) {
+            /* Char slot 0: N=0x100 at offset 0x58, userid at N+0x6F */
+            *(uint32_t *)(plaintext + DS3_CHAR_USERID_LEN_OFFSET) = 0x100u;
+            *(uint64_t *)(plaintext + 0x100u + DS3_CHAR_USERID_DELTA) = userid;
+        } else if (i == 10) {
+            /* Summary slot */
+            *(uint64_t *)(plaintext + DS3_SUMMARY_USERID_OFFSET) = userid;
+            *(int32_t *)(plaintext + DS3_SUMMARY_ACTIVE_OFFSET) = 0;
+            plaintext[DS3_SUMMARY_AVAILABLE_OFFSET] = 1;
+        }
+
+        /* Encrypt into file buffer at slot_offset + 32 (after MD5 + IV) */
+        ct_buf = file_data + slot_offset + DS3_BND4_MD5_HEADER_SIZE + 16u;
+        CopyMemory(iv_scratch, DS3_TEST_IV, 16);
+        status = BCryptEncrypt(key, (PUCHAR)plaintext, pt_size, NULL, iv_scratch, 16,
+                                ct_buf, ct_size, &ct_written, BCRYPT_BLOCK_PADDING);
+        if (!NT_SUCCESS(status) || ct_written != ct_size) {
+            LocalFree(plaintext);
+            ok = false;
+            break;
+        }
+
+        /* Write IV right after MD5 header in the file buffer */
+        CopyMemory(file_data + slot_offset + DS3_BND4_MD5_HEADER_SIZE, DS3_TEST_IV, 16);
+
+        /* MD5(IV || ciphertext) into the slot's MD5 header */
+        md5_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, 16u + ct_size);
+        if (!md5_buf) {
+            LocalFree(plaintext);
+            ok = false;
+            break;
+        }
+        CopyMemory(md5_buf, DS3_TEST_IV, 16);
+        CopyMemory(md5_buf + 16, ct_buf, ct_size);
+        md5_buffer(md5_buf, 16u + ct_size, file_data + slot_offset);
+        LocalFree(md5_buf);
+
+        LocalFree(plaintext);
+    }
+
+    /* BCrypt cleanup */
+    BCryptDestroyKey(key);
+    LocalFree(key_obj);
+    BCryptCloseAlgorithmProvider(alg, 0);
+
+    if (!ok) {
+        LocalFree(file_data);
+        return false;
+    }
+
+    /* Write file */
+    file = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) {
+        LocalFree(file_data);
+        return false;
+    }
     ok = WriteFile(file, file_data, total_size, &written, NULL) && written == total_size;
     CloseHandle(file);
     LocalFree(file_data);
@@ -1580,6 +1763,733 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
             }
             if (exit_code == 0) {
                 st_printf(L"theme-change-classify: ok\n");
+            }
+        } else if (wcscmp(sub, L"ds3-aes-known-vector") == 0) {
+            /* Encrypts DS3_TEST_KNOWN_PLAINTEXT with DS3_AES_KEY_BYTES and DS3_TEST_IV,
+             * asserts byte-exact equality with DS3_TEST_KNOWN_CIPHERTEXT, then decrypts
+             * back and asserts equality with original plaintext. Validates BCrypt wiring
+             * independent of the DS3 fixture builder. */
+            BCRYPT_ALG_HANDLE alg = NULL;
+            BCRYPT_KEY_HANDLE key = NULL;
+            uint8_t *key_obj = NULL;
+            ULONG key_obj_size = 0;
+            ULONG result_size = 0;
+            NTSTATUS status;
+            bool ok = true;
+
+            status = BCryptOpenAlgorithmProvider(&alg, BCRYPT_AES_ALGORITHM, NULL, 0);
+            if (!NT_SUCCESS(status)) {
+                st_printf(L"FAIL: BCryptOpenAlgorithmProvider\n");
+                ok = false;
+            }
+            if (ok) {
+                status = BCryptSetProperty(alg, BCRYPT_CHAINING_MODE,
+                                            (PUCHAR)BCRYPT_CHAIN_MODE_CBC,
+                                            sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
+                if (!NT_SUCCESS(status)) {
+                    st_printf(L"FAIL: BCryptSetProperty\n");
+                    ok = false;
+                }
+            }
+            if (ok) {
+                status = BCryptGetProperty(alg, BCRYPT_OBJECT_LENGTH,
+                                            (PUCHAR)&key_obj_size, sizeof(ULONG),
+                                            &result_size, 0);
+                if (!NT_SUCCESS(status)) {
+                    st_printf(L"FAIL: BCryptGetProperty\n");
+                    ok = false;
+                }
+            }
+            if (ok) {
+                key_obj = (uint8_t *)LocalAlloc(LMEM_FIXED, key_obj_size);
+                if (!key_obj) {
+                    st_printf(L"FAIL: LocalAlloc\n");
+                    ok = false;
+                }
+            }
+            if (ok) {
+                status = BCryptGenerateSymmetricKey(alg, &key, key_obj, key_obj_size,
+                                                    (PUCHAR)DS3_AES_KEY_BYTES, 16, 0);
+                if (!NT_SUCCESS(status)) {
+                    st_printf(L"FAIL: BCryptGenerateSymmetricKey\n");
+                    ok = false;
+                }
+            }
+
+            if (ok) {
+                uint8_t iv_copy[16];
+                uint8_t ct_buf[64];
+                ULONG ct_len = 0;
+
+                CopyMemory(iv_copy, DS3_TEST_IV, 16);
+                status = BCryptEncrypt(key, (PUCHAR)DS3_TEST_KNOWN_PLAINTEXT, 16, NULL,
+                                        iv_copy, 16, ct_buf, sizeof(ct_buf), &ct_len,
+                                        BCRYPT_BLOCK_PADDING);
+                if (!NT_SUCCESS(status)) {
+                    st_printf(L"FAIL: BCryptEncrypt\n");
+                    ok = false;
+                }
+                if (ok && (ct_len != DS3_TEST_KNOWN_CIPHERTEXT_SIZE
+                           || RtlCompareMemory(ct_buf, DS3_TEST_KNOWN_CIPHERTEXT,
+                                               DS3_TEST_KNOWN_CIPHERTEXT_SIZE)
+                              != DS3_TEST_KNOWN_CIPHERTEXT_SIZE)) {
+                    st_printf(L"FAIL: ciphertext mismatch\n");
+                    ok = false;
+                }
+
+                if (ok) {
+                    uint8_t pt_buf[64];
+                    ULONG pt_len = 0;
+
+                    CopyMemory(iv_copy, DS3_TEST_IV, 16);
+                    status = BCryptDecrypt(key, ct_buf, ct_len, NULL, iv_copy, 16,
+                                            pt_buf, sizeof(pt_buf), &pt_len,
+                                            BCRYPT_BLOCK_PADDING);
+                    if (!NT_SUCCESS(status) || pt_len != 16
+                        || RtlCompareMemory(pt_buf, DS3_TEST_KNOWN_PLAINTEXT, 16) != 16) {
+                        st_printf(L"FAIL: decrypt mismatch\n");
+                        ok = false;
+                    }
+                }
+            }
+
+            if (key) {
+                BCryptDestroyKey(key);
+            }
+            if (key_obj) {
+                LocalFree(key_obj);
+            }
+            if (alg) {
+                BCryptCloseAlgorithmProvider(alg, 0);
+            }
+
+            if (ok) {
+                st_printf(L"PASS: ds3-aes-known-vector\n");
+                exit_code = 0;
+            } else {
+                exit_code = 1;
+            }
+        } else if (wcscmp(sub, L"ds3-load-min-fixture") == 0) {
+            /* Build a minimal valid DS3 fixture, load it, verify active slot is 0,
+             * verify slot 0 is non-NULL, and verify slot 1 is NULL. */
+            if (argc < 4) {
+                st_printf(L"Usage: ds3-load-min-fixture <tmp_path>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *tmp_path = argv[3];
+                ds3_save_data_t *save;
+                int slot = -1;
+                const ds3_char_data_t *c0;
+                const ds3_char_data_t *c1;
+
+                if (!praxis_make_min_valid_ds3_sl2(tmp_path, DS3_TEST_USERID_A)) {
+                    st_printf(L"FAIL: fixture builder failed\n");
+                    exit_code = 1;
+                } else if ((save = ds3_save_data_load(tmp_path)) == NULL) {
+                    DeleteFileW(tmp_path);
+                    st_printf(L"FAIL: ds3_save_data_load returned NULL\n");
+                    exit_code = 1;
+                } else if (!ds3_save_get_active_slot(save, &slot) || slot != 0) {
+                    ds3_save_data_free(save);
+                    DeleteFileW(tmp_path);
+                    st_printf(L"FAIL: active slot expected 0, got %d\n", slot);
+                    exit_code = 1;
+                } else if ((c0 = ds3_char_data_ref(save, 0)) == NULL) {
+                    ds3_save_data_free(save);
+                    DeleteFileW(tmp_path);
+                    st_printf(L"FAIL: slot 0 should be non-NULL\n");
+                    exit_code = 1;
+                } else if ((c1 = ds3_char_data_ref(save, 1)) != NULL) {
+                    (void)c1;
+                    ds3_save_data_free(save);
+                    DeleteFileW(tmp_path);
+                    st_printf(L"FAIL: slot 1 should be NULL\n");
+                    exit_code = 1;
+                } else {
+                    ds3_save_data_free(save);
+                    DeleteFileW(tmp_path);
+                    st_printf(L"PASS: ds3-load-min-fixture\n");
+                    exit_code = 0;
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-roundtrip-byte-stable") == 0) {
+            /* Build a fixture, read file bytes A, load + serialize slot 0 +
+             * import_raw the same bytes back, write file, read file bytes B,
+             * assert A == B. A no-op roundtrip must be byte-stable. */
+            if (argc < 4) {
+                st_printf(L"Usage: ds3-roundtrip-byte-stable <tmp_path>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *tmp_path = argv[3];
+
+                if (!praxis_make_min_valid_ds3_sl2(tmp_path, DS3_TEST_USERID_A)) {
+                    st_printf(L"FAIL: fixture builder failed\n");
+                    exit_code = 1;
+                } else {
+                    HANDLE fh;
+                    DWORD file_size = 0;
+                    DWORD bytes_read = 0;
+                    uint8_t *buf_a = NULL;
+                    uint8_t *buf_b = NULL;
+                    uint8_t *ser_buf = NULL;
+                    ds3_save_data_t *save = NULL;
+                    const ds3_char_data_t *c0 = NULL;
+                    bool ok = false;
+
+                    fh = CreateFileW(tmp_path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                    if (fh == INVALID_HANDLE_VALUE) {
+                        DeleteFileW(tmp_path);
+                        st_printf(L"FAIL: open A\n");
+                        exit_code = 1;
+                    } else {
+                        file_size = GetFileSize(fh, NULL);
+                        buf_a = (uint8_t *)LocalAlloc(LMEM_FIXED, file_size);
+                        buf_b = (uint8_t *)LocalAlloc(LMEM_FIXED, file_size);
+                        if (!buf_a || !buf_b
+                            || !ReadFile(fh, buf_a, file_size, &bytes_read, NULL)
+                            || bytes_read != file_size) {
+                            CloseHandle(fh);
+                            if (buf_a) LocalFree(buf_a);
+                            if (buf_b) LocalFree(buf_b);
+                            DeleteFileW(tmp_path);
+                            st_printf(L"FAIL: read A\n");
+                            exit_code = 1;
+                        } else {
+                            CloseHandle(fh);
+
+                            save = ds3_save_data_load(tmp_path);
+                            ser_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS3_CHAR_DATA_SERIALIZED_SIZE);
+                            if (!save) {
+                                if (ser_buf) LocalFree(ser_buf);
+                                LocalFree(buf_a);
+                                LocalFree(buf_b);
+                                DeleteFileW(tmp_path);
+                                st_printf(L"FAIL: load\n");
+                                exit_code = 1;
+                            } else if (!ser_buf || (c0 = ds3_char_data_ref(save, 0)) == NULL) {
+                                if (ser_buf) LocalFree(ser_buf);
+                                ds3_save_data_free(save);
+                                LocalFree(buf_a);
+                                LocalFree(buf_b);
+                                DeleteFileW(tmp_path);
+                                st_printf(L"FAIL: ref\n");
+                                exit_code = 1;
+                            } else if (!ds3_char_data_serialize(c0, ser_buf, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                                LocalFree(ser_buf);
+                                ds3_save_data_free(save);
+                                LocalFree(buf_a);
+                                LocalFree(buf_b);
+                                DeleteFileW(tmp_path);
+                                st_printf(L"FAIL: serialize\n");
+                                exit_code = 1;
+                            } else if (!ds3_char_data_import_raw(save, 0, ser_buf)) {
+                                LocalFree(ser_buf);
+                                ds3_save_data_free(save);
+                                LocalFree(buf_a);
+                                LocalFree(buf_b);
+                                DeleteFileW(tmp_path);
+                                st_printf(L"FAIL: import_raw\n");
+                                exit_code = 1;
+                            } else {
+                                LocalFree(ser_buf);
+                                ds3_save_data_free(save);
+
+                                fh = CreateFileW(tmp_path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+                                if (fh == INVALID_HANDLE_VALUE
+                                    || !ReadFile(fh, buf_b, file_size, &bytes_read, NULL)
+                                    || bytes_read != file_size) {
+                                    if (fh != INVALID_HANDLE_VALUE) CloseHandle(fh);
+                                    LocalFree(buf_a);
+                                    LocalFree(buf_b);
+                                    DeleteFileW(tmp_path);
+                                    st_printf(L"FAIL: read B\n");
+                                    exit_code = 1;
+                                } else {
+                                    CloseHandle(fh);
+                                    ok = (RtlCompareMemory(buf_a, buf_b, file_size) == file_size);
+                                    LocalFree(buf_a);
+                                    LocalFree(buf_b);
+                                    DeleteFileW(tmp_path);
+                                    if (!ok) {
+                                        st_printf(L"FAIL: bytes differ after no-op roundtrip\n");
+                                        exit_code = 1;
+                                    } else {
+                                        st_printf(L"PASS: ds3-roundtrip-byte-stable\n");
+                                        exit_code = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-active-slot") == 0) {
+            /* Build a fixture, load it, verify the active slot equals the expected
+             * value passed on the command line. */
+            if (argc < 5) {
+                st_printf(L"Usage: ds3-active-slot <tmp_path> <expected_int>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *tmp_path = argv[3];
+                int expected = _wtoi(argv[4]);
+                ds3_save_data_t *save;
+                int slot = -1;
+                bool ok;
+
+                if (!praxis_make_min_valid_ds3_sl2(tmp_path, DS3_TEST_USERID_A)) {
+                    st_printf(L"FAIL: fixture builder failed\n");
+                    exit_code = 1;
+                } else if ((save = ds3_save_data_load(tmp_path)) == NULL) {
+                    DeleteFileW(tmp_path);
+                    st_printf(L"FAIL: load\n");
+                    exit_code = 1;
+                } else {
+                    ok = ds3_save_get_active_slot(save, &slot);
+                    ds3_save_data_free(save);
+                    DeleteFileW(tmp_path);
+                    if (!ok || slot != expected) {
+                        st_printf(L"FAIL: active slot %d, expected %d\n", slot, expected);
+                        exit_code = 1;
+                    } else {
+                        st_printf(L"PASS: ds3-active-slot (slot=%d)\n", slot);
+                        exit_code = 0;
+                    }
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-null-guards") == 0) {
+            /* Verify each of the 6 public DS3 functions rejects NULL / out-of-range
+             * inputs cleanly without crashing or returning success. */
+            bool ok = true;
+            int slot_out = -1;
+            uint8_t *dummy_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS3_CHAR_DATA_SERIALIZED_SIZE);
+            wchar_t tmp_path[MAX_PATH];
+            ds3_save_data_t *save = NULL;
+            const ds3_char_data_t *c0 = NULL;
+
+            if (!dummy_buf) {
+                st_printf(L"FAIL: dummy_buf alloc failed\n");
+                exit_code = 1;
+            } else {
+                /* ds3_save_data_load(NULL) returns NULL */
+                if (ds3_save_data_load(NULL) != NULL) {
+                    st_printf(L"FAIL: load(NULL) should return NULL\n");
+                    ok = false;
+                }
+                /* ds3_save_data_free(NULL) does not crash */
+                ds3_save_data_free(NULL);
+                /* ds3_save_get_active_slot(NULL, &slot) returns false */
+                if (ds3_save_get_active_slot(NULL, &slot_out)) {
+                    st_printf(L"FAIL: get_active_slot(NULL, ...) should return false\n");
+                    ok = false;
+                }
+
+                /* Build a fixture for the rest of the checks */
+                tmp_path[0] = L'\0';
+                GetTempPathW(MAX_PATH, tmp_path);
+                PathAppendW(tmp_path, L"ds3-null-guards-test.sl2");
+
+                if (!praxis_make_min_valid_ds3_sl2(tmp_path, DS3_TEST_USERID_A)) {
+                    st_printf(L"FAIL: fixture builder failed\n");
+                    LocalFree(dummy_buf);
+                    exit_code = 1;
+                } else if ((save = ds3_save_data_load(tmp_path)) == NULL) {
+                    DeleteFileW(tmp_path);
+                    LocalFree(dummy_buf);
+                    st_printf(L"FAIL: load fixture\n");
+                    exit_code = 1;
+                } else {
+                    /* ds3_save_get_active_slot(valid_save, NULL) returns false */
+                    if (ds3_save_get_active_slot(save, NULL)) {
+                        st_printf(L"FAIL: get_active_slot(..., NULL) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_ref(NULL, 0) returns NULL */
+                    if (ds3_char_data_ref(NULL, 0) != NULL) {
+                        st_printf(L"FAIL: ref(NULL, 0) should return NULL\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_ref(valid_save, -1) returns NULL */
+                    if (ds3_char_data_ref(save, -1) != NULL) {
+                        st_printf(L"FAIL: ref(save, -1) should return NULL\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_ref(valid_save, 10) returns NULL */
+                    if (ds3_char_data_ref(save, 10) != NULL) {
+                        st_printf(L"FAIL: ref(save, 10) should return NULL\n");
+                        ok = false;
+                    }
+
+                    c0 = ds3_char_data_ref(save, 0);
+
+                    /* ds3_char_data_serialize(NULL, buf, size) returns false */
+                    if (ds3_char_data_serialize(NULL, dummy_buf, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                        st_printf(L"FAIL: serialize(NULL, ...) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_serialize(valid_char, NULL, size) returns false */
+                    if (c0 && ds3_char_data_serialize(c0, NULL, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                        st_printf(L"FAIL: serialize(..., NULL, ...) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_serialize(valid_char, buf, 0) returns false */
+                    if (c0 && ds3_char_data_serialize(c0, dummy_buf, 0)) {
+                        st_printf(L"FAIL: serialize(..., ..., 0) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_import_raw(NULL, 0, buf) returns false */
+                    if (ds3_char_data_import_raw(NULL, 0, dummy_buf)) {
+                        st_printf(L"FAIL: import_raw(NULL, ...) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_import_raw(valid_save, 0, NULL) returns false */
+                    if (ds3_char_data_import_raw(save, 0, NULL)) {
+                        st_printf(L"FAIL: import_raw(..., ..., NULL) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_import_raw(valid_save, -1, buf) returns false */
+                    if (ds3_char_data_import_raw(save, -1, dummy_buf)) {
+                        st_printf(L"FAIL: import_raw(..., -1, ...) should return false\n");
+                        ok = false;
+                    }
+                    /* ds3_char_data_import_raw(valid_save, 10, buf) returns false */
+                    if (ds3_char_data_import_raw(save, 10, dummy_buf)) {
+                        st_printf(L"FAIL: import_raw(..., 10, ...) should return false\n");
+                        ok = false;
+                    }
+
+                    ds3_save_data_free(save);
+                    DeleteFileW(tmp_path);
+                    LocalFree(dummy_buf);
+
+                    if (!ok) {
+                        exit_code = 1;
+                    } else {
+                        st_printf(L"PASS: ds3-null-guards\n");
+                        exit_code = 0;
+                    }
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-import-resigns-userid") == 0) {
+            /* Build fixture A with USERID_A and fixture B with USERID_B.
+             * Serialize A's slot 0, import into B's slot 0, reload B, and verify
+             * that B's slot 0 userid is USERID_B (re-signed) and not USERID_A.
+             * Since ds3_char_data_t is opaque, the userid is verified by
+             * serializing B's slot 0 after import and reading the userid out of
+             * the plaintext buffer at offset N + DS3_CHAR_USERID_DELTA, where
+             * N is the uint32 at DS3_CHAR_USERID_LEN_OFFSET. */
+            if (argc < 5) {
+                st_printf(L"Usage: ds3-import-resigns-userid <tmp_path_A> <tmp_path_B>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *path_a = argv[3];
+                const wchar_t *path_b = argv[4];
+                ds3_save_data_t *save_a = NULL;
+                ds3_save_data_t *save_b = NULL;
+                const ds3_char_data_t *c0_a = NULL;
+                const ds3_char_data_t *c0_b = NULL;
+                uint8_t *ser_buf = NULL;
+                uint8_t *verify_buf = NULL;
+                bool flow_ok = true;
+
+                if (!praxis_make_min_valid_ds3_sl2(path_a, DS3_TEST_USERID_A)) {
+                    st_printf(L"FAIL: fixture A builder failed\n");
+                    flow_ok = false;
+                } else if (!praxis_make_min_valid_ds3_sl2(path_b, DS3_TEST_USERID_B)) {
+                    DeleteFileW(path_a);
+                    st_printf(L"FAIL: fixture B builder failed\n");
+                    flow_ok = false;
+                }
+
+                if (flow_ok) {
+                    ser_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS3_CHAR_DATA_SERIALIZED_SIZE);
+                    if (!ser_buf) {
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: ser_buf alloc\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok) {
+                    save_a = ds3_save_data_load(path_a);
+                    if (!save_a) {
+                        LocalFree(ser_buf);
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: load A\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok) {
+                    c0_a = ds3_char_data_ref(save_a, 0);
+                    if (!c0_a) {
+                        ds3_save_data_free(save_a);
+                        LocalFree(ser_buf);
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: ref A slot 0\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok && !ds3_char_data_serialize(c0_a, ser_buf, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                    ds3_save_data_free(save_a);
+                    LocalFree(ser_buf);
+                    DeleteFileW(path_a);
+                    DeleteFileW(path_b);
+                    st_printf(L"FAIL: serialize A\n");
+                    flow_ok = false;
+                }
+
+                if (flow_ok) {
+                    ds3_save_data_free(save_a);
+                    save_a = NULL;
+                    save_b = ds3_save_data_load(path_b);
+                    if (!save_b) {
+                        LocalFree(ser_buf);
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: load B\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok && !ds3_char_data_import_raw(save_b, 0, ser_buf)) {
+                    ds3_save_data_free(save_b);
+                    LocalFree(ser_buf);
+                    DeleteFileW(path_a);
+                    DeleteFileW(path_b);
+                    st_printf(L"FAIL: import_raw into B\n");
+                    flow_ok = false;
+                }
+
+                if (flow_ok) {
+                    LocalFree(ser_buf);
+                    ser_buf = NULL;
+                    ds3_save_data_free(save_b);
+                    save_b = ds3_save_data_load(path_b);
+                    if (!save_b) {
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: reload B\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok) {
+                    c0_b = ds3_char_data_ref(save_b, 0);
+                    if (!c0_b) {
+                        ds3_save_data_free(save_b);
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: ref B slot 0 after import\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok) {
+                    verify_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS3_CHAR_DATA_SERIALIZED_SIZE);
+                    if (!verify_buf || !ds3_char_data_serialize(c0_b, verify_buf, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                        if (verify_buf) LocalFree(verify_buf);
+                        ds3_save_data_free(save_b);
+                        DeleteFileW(path_a);
+                        DeleteFileW(path_b);
+                        st_printf(L"FAIL: serialize B for verification\n");
+                        flow_ok = false;
+                    }
+                }
+
+                if (flow_ok) {
+                    uint32_t n = *(const uint32_t *)(verify_buf + DS3_CHAR_USERID_LEN_OFFSET);
+                    uint64_t userid_in_b = *(const uint64_t *)(verify_buf + n + DS3_CHAR_USERID_DELTA);
+
+                    LocalFree(verify_buf);
+                    ds3_save_data_free(save_b);
+                    DeleteFileW(path_a);
+                    DeleteFileW(path_b);
+
+                    if (userid_in_b != DS3_TEST_USERID_B) {
+                        st_printf(L"FAIL: userid in B after import is 0x%llX, expected 0x%llX (USERID_B)\n",
+                            (unsigned long long)userid_in_b, (unsigned long long)DS3_TEST_USERID_B);
+                        exit_code = 1;
+                    } else {
+                        st_printf(L"PASS: ds3-import-resigns-userid (userid correctly re-signed to B's userid)\n");
+                        exit_code = 0;
+                    }
+                } else {
+                    exit_code = 1;
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-real-save-load") == 0) {
+            /* Load a real DS3 save file (passed as argv[3]) and print the
+             * active slot plus availability of all 10 char slots. Always
+             * frees the save_data; does not modify the file. */
+            if (argc < 4) {
+                st_printf(L"Usage: ds3-real-save-load <path>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *path = argv[3];
+                ds3_save_data_t *save = ds3_save_data_load(path);
+
+                if (!save) {
+                    st_printf(L"FAIL: ds3_save_data_load returned NULL for real save\n");
+                    exit_code = 1;
+                } else {
+                    int slot = -1;
+                    int i;
+
+                    if (ds3_save_get_active_slot(save, &slot)) {
+                        st_printf(L"Active slot: %d\n", slot);
+                    } else {
+                        st_printf(L"Active slot: (not available)\n");
+                    }
+
+                    for (i = 0; i < 10; i++) {
+                        const ds3_char_data_t *c = ds3_char_data_ref(save, i);
+                        st_printf(L"Slot %d: %ls\n", i, c ? L"available" : L"empty");
+                    }
+
+                    ds3_save_data_free(save);
+                    st_printf(L"PASS: ds3-real-save-load\n");
+                    exit_code = 0;
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-real-save-classify") == 0) {
+            /* Open a real DS3 save file (argv[3]) read-only, verify BND4 magic
+             * at offset 0 and slot count >= 12 at offset 0x0C, and print the
+             * file size. Never modifies the file. */
+            if (argc < 4) {
+                st_printf(L"Usage: ds3-real-save-classify <path>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *path = argv[3];
+                HANDLE fh = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ, NULL,
+                    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+
+                if (fh == INVALID_HANDLE_VALUE) {
+                    st_printf(L"FAIL: cannot open file\n");
+                    exit_code = 1;
+                } else {
+                    DWORD file_size = GetFileSize(fh, NULL);
+                    uint8_t header[0x10];
+                    uint8_t slot_count_buf[4];
+                    DWORD bytes_read = 0;
+
+                    if (!ReadFile(fh, header, sizeof(header), &bytes_read, NULL)
+                        || bytes_read != sizeof(header)) {
+                        CloseHandle(fh);
+                        st_printf(L"FAIL: cannot read header\n");
+                        exit_code = 1;
+                    } else if (header[0] != 'B' || header[1] != 'N'
+                               || header[2] != 'D' || header[3] != '4') {
+                        CloseHandle(fh);
+                        st_printf(L"FAIL: not a BND4 file\n");
+                        exit_code = 1;
+                    } else {
+                        int slot_count;
+
+                        SetFilePointer(fh, 0x0C, NULL, FILE_BEGIN);
+                        ReadFile(fh, slot_count_buf, 4, &bytes_read, NULL);
+                        slot_count = *(int *)slot_count_buf;
+                        CloseHandle(fh);
+
+                        if (slot_count < 12) {
+                            st_printf(L"FAIL: slot count %d < 12\n", slot_count);
+                            exit_code = 1;
+                        } else {
+                            st_printf(L"File size: %u bytes\n", file_size);
+                            st_printf(L"Slot count: %d\n", slot_count);
+                            st_printf(L"PASS: ds3-real-save-classify\n");
+                            exit_code = 0;
+                        }
+                    }
+                }
+            }
+        } else if (wcscmp(sub, L"ds3-real-save-roundtrip-readonly") == 0) {
+            /* Load a copy of a real DS3 save (argv[4]), serialize and re-import
+             * the first available char slot's data (no-op semantically), reload,
+             * and verify the active slot is unchanged. The real save path
+             * (argv[3]) is not touched here; the caller must copy it to tmp_copy
+             * before invoking this selftest. */
+            if (argc < 5) {
+                st_printf(L"Usage: ds3-real-save-roundtrip-readonly <path> <tmp_copy>\n");
+                exit_code = 1;
+            } else {
+                const wchar_t *tmp_path = argv[4];
+                ds3_save_data_t *save;
+
+                (void)argv[3]; /* path retained for arg symmetry; only tmp_copy is touched */
+
+                save = ds3_save_data_load(tmp_path);
+                if (!save) {
+                    st_printf(L"FAIL: load tmp copy\n");
+                    exit_code = 1;
+                } else {
+                    int active_slot = -1;
+                    int first_slot = -1;
+                    int i;
+
+                    ds3_save_get_active_slot(save, &active_slot);
+
+                    for (i = 0; i < 10; i++) {
+                        if (ds3_char_data_ref(save, i)) {
+                            first_slot = i;
+                            break;
+                        }
+                    }
+
+                    if (first_slot < 0) {
+                        ds3_save_data_free(save);
+                        st_printf(L"SKIP: no available char slots in save\n");
+                        exit_code = 0;
+                    } else {
+                        const ds3_char_data_t *c = ds3_char_data_ref(save, first_slot);
+                        uint8_t *ser_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS3_CHAR_DATA_SERIALIZED_SIZE);
+
+                        if (!ser_buf) {
+                            ds3_save_data_free(save);
+                            st_printf(L"FAIL: alloc\n");
+                            exit_code = 1;
+                        } else if (!ds3_char_data_serialize(c, ser_buf, DS3_CHAR_DATA_SERIALIZED_SIZE)) {
+                            LocalFree(ser_buf);
+                            ds3_save_data_free(save);
+                            st_printf(L"FAIL: serialize\n");
+                            exit_code = 1;
+                        } else if (!ds3_char_data_import_raw(save, first_slot, ser_buf)) {
+                            LocalFree(ser_buf);
+                            ds3_save_data_free(save);
+                            st_printf(L"FAIL: import_raw\n");
+                            exit_code = 1;
+                        } else {
+                            int active_slot_after = -1;
+
+                            LocalFree(ser_buf);
+                            ds3_save_data_free(save);
+
+                            save = ds3_save_data_load(tmp_path);
+                            if (!save) {
+                                st_printf(L"FAIL: reload after roundtrip\n");
+                                exit_code = 1;
+                            } else {
+                                ds3_save_get_active_slot(save, &active_slot_after);
+                                ds3_save_data_free(save);
+
+                                if (active_slot != active_slot_after) {
+                                    st_printf(L"FAIL: active slot changed from %d to %d\n",
+                                        active_slot, active_slot_after);
+                                    exit_code = 1;
+                                } else {
+                                    st_printf(L"PASS: ds3-real-save-roundtrip-readonly (slot %d, active=%d)\n",
+                                        first_slot, active_slot);
+                                    exit_code = 0;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         } else {
             st_printf(L"unknown selftest subcommand: %ls\n", sub);
