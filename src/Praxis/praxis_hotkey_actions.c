@@ -67,8 +67,10 @@ static bool resolve_save_path_for(const profile_store_t *store,
     }
 
     if (gp->original_save_dir[0] != L'\0') {
+        const wchar_t *fname = (backend->save_filename && backend->save_filename[0])
+            ? backend->save_filename : L"ER0000.sl2";
         lstrcpynW(out, gp->original_save_dir, (int)out_chars);
-        return PathAppendW(out, L"ER0000.sl2") == TRUE;
+        return PathAppendW(out, fname) == TRUE;
     }
 
     return backend->resolve_save_path(out, out_chars);
@@ -222,8 +224,8 @@ static bool backup_full_to_path(const game_backend_t *backend,
  * exact-match walk-up. No race.
  */
 
-bool praxis_hotkey_action_backup_full(HWND hwnd, profile_store_t *store,
-                                      save_tree_t *save_tree, int compression_level) {
+praxis_action_result_t praxis_hotkey_action_backup_full(HWND hwnd, profile_store_t *store,
+                                                        save_tree_t *save_tree, int compression_level) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
     const game_backend_t *backend = get_active_backend_for(store);
     compression_level_t cl = (compression_level_t)compression_level;
@@ -235,43 +237,50 @@ bool praxis_hotkey_action_backup_full(HWND hwnd, profile_store_t *store,
 
     (void)hwnd;
 
-    if (!bp || !backend || !resolve_save_path_for(store, save_path, MAX_PATH)) {
-        return false;
+    if (!bp) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!backend || !resolve_save_path_for(store, save_path, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_SAVE_NOT_FOUND;
     }
 
     if (!save_tree || !save_tree_get_selected_dir(save_tree, base_dir, MAX_PATH)) {
         if (!profile_store_resolve_backup_root(store, bp->id, base_dir, MAX_PATH)) {
-            return false;
+            return PRAXIS_ACTION_ERR_NO_PROFILE;
         }
     }
 
     /* All backups use the backend-defined extension (e.g. `.ersm` for Elden
-     * Ring) regardless of compression level. The actual on-disk format is
-     * determined at restore time by the file's magic bytes via
-     * ersm_detect_file_format(): COMP_LEVEL_NONE produces a byte-identical
-     * raw BND4 copy (ERSM_FMT_BND4_RAW), while compressed levels produce an
-     * ERSM container (ERSM_FMT_ERSM_CONTAINER). The TreeView strips
-     * extensions for display, so legacy `.sl2`-named backups appear the
-     * same as new `.ersm` ones and continue to restore correctly. */
+     * Ring, `.ds3sm` for Dark Souls III) regardless of compression level.
+     * The actual on-disk format is determined at restore time by the file's
+     * magic bytes via ersm_detect_file_format(): COMP_LEVEL_NONE produces a
+     * byte-identical raw BND4 copy (ERSM_FMT_BND4_RAW), while compressed
+     * levels produce an ERSM container (ERSM_FMT_ERSM_CONTAINER). The
+     * TreeView strips extensions for display, so legacy `.sl2`-named backups
+     * appear the same as new extension ones and continue to restore correctly. */
     ext = backend->backup_extension;
     make_backup_filename(base_dir, L"manual", ext, dst, MAX_PATH);
 
-    if (cl == COMP_LEVEL_NONE) {
+    if (cl == COMP_LEVEL_NONE || backend->full_save_skip_compression) {
         ok = backup_full_raw(save_path, dst);
     } else {
         ok = backend->backup_full(save_path, dst, comp_level_to_lzma(cl));
     }
 
-    if (ok && save_tree) {
+    if (!ok) {
+        return PRAXIS_ACTION_ERR_IO;
+    }
+
+    if (save_tree) {
         save_tree_refresh(save_tree);
         save_tree_select_full_path(save_tree, dst);
     }
 
-    return ok;
+    return PRAXIS_ACTION_OK;
 }
 
-bool praxis_hotkey_action_backup_slot(HWND hwnd, profile_store_t *store,
-                                      save_tree_t *save_tree, int compression_level) {
+praxis_action_result_t praxis_hotkey_action_backup_slot(HWND hwnd, profile_store_t *store,
+                                                        save_tree_t *save_tree, int compression_level) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
     const game_backend_t *backend = get_active_backend_for(store);
     wchar_t save_path[MAX_PATH];
@@ -283,15 +292,22 @@ bool praxis_hotkey_action_backup_slot(HWND hwnd, profile_store_t *store,
 
     (void)hwnd;
 
-    if (!bp || !game_backend_supports_slot_ops(backend) ||
-        !resolve_save_path_for(store, save_path, MAX_PATH) ||
-        !backend->get_active_slot(save_path, &slot)) {
-        return false;
+    if (!bp) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!game_backend_supports_slot_ops(backend)) {
+        return PRAXIS_ACTION_ERR_SLOT_NOT_SUPPORTED;
+    }
+    if (!resolve_save_path_for(store, save_path, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_SAVE_NOT_FOUND;
+    }
+    if (!backend->get_active_slot(save_path, &slot)) {
+        return PRAXIS_ACTION_ERR_SLOT_EMPTY;
     }
 
     if (!save_tree || !save_tree_get_selected_dir(save_tree, base_dir, MAX_PATH)) {
         if (!profile_store_resolve_backup_root(store, bp->id, base_dir, MAX_PATH)) {
-            return false;
+            return PRAXIS_ACTION_ERR_NO_PROFILE;
         }
     }
 
@@ -299,16 +315,20 @@ bool praxis_hotkey_action_backup_slot(HWND hwnd, profile_store_t *store,
     make_backup_filename(base_dir, prefix, backend->backup_extension, dst, MAX_PATH);
     ok = backend->backup_slot(save_path, slot, dst,
         comp_level_to_lzma((compression_level_t)compression_level));
-    if (ok && save_tree) {
+    if (!ok) {
+        return PRAXIS_ACTION_ERR_IO;
+    }
+
+    if (save_tree) {
         save_tree_refresh(save_tree);
         save_tree_select_full_path(save_tree, dst);
     }
 
-    return ok;
+    return PRAXIS_ACTION_OK;
 }
 
-bool praxis_hotkey_action_backup_replace_selected(HWND hwnd, profile_store_t *store,
-                                                  save_tree_t *save_tree, int compression_level) {
+praxis_action_result_t praxis_hotkey_action_backup_replace_selected(HWND hwnd, profile_store_t *store,
+                                                                    save_tree_t *save_tree, int compression_level) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
     const game_backend_t *backend = get_active_backend_for(store);
     compression_level_t cl = (compression_level_t)compression_level;
@@ -320,44 +340,59 @@ bool praxis_hotkey_action_backup_replace_selected(HWND hwnd, profile_store_t *st
 
     (void)hwnd;
 
-    if (!bp || !backend || !save_tree ||
-        !save_tree_get_selected_path(save_tree, selected_path, MAX_PATH) ||
-        !selected_path[0] ||
-        !path_is_writable_file(selected_path) ||
-        !resolve_save_path_for(store, save_path, MAX_PATH) ||
-        !make_replace_temp_path(selected_path, temp_path, MAX_PATH)) {
-        return false;
+    if (!bp) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!backend || !save_tree) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!save_tree_get_selected_path(save_tree, selected_path, MAX_PATH) ||
+        !selected_path[0]) {
+        return PRAXIS_ACTION_ERR_NO_SELECTION;
+    }
+    if (!path_is_writable_file(selected_path)) {
+        return PRAXIS_ACTION_ERR_FILE_READONLY;
+    }
+    if (!resolve_save_path_for(store, save_path, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_SAVE_NOT_FOUND;
+    }
+    if (!make_replace_temp_path(selected_path, temp_path, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_IO;
     }
 
     selected_kind = save_compress_classify_backup(selected_path);
     if (selected_kind == SAVE_KIND_FULL) {
-        ok = backup_full_to_path(backend, save_path, temp_path, cl);
+        compression_level_t effective_cl = backend->full_save_skip_compression ? COMP_LEVEL_NONE : cl;
+        ok = backup_full_to_path(backend, save_path, temp_path, effective_cl);
     } else if (selected_kind == SAVE_KIND_SLOT) {
         int slot = -1;
 
-        if (game_backend_supports_slot_ops(backend) &&
-            backend->get_active_slot(save_path, &slot)) {
-            ok = backend->backup_slot(save_path, slot, temp_path, comp_level_to_lzma(cl));
+        if (!game_backend_supports_slot_ops(backend)) {
+            return PRAXIS_ACTION_ERR_SLOT_NOT_SUPPORTED;
         }
+        if (!backend->get_active_slot(save_path, &slot)) {
+            return PRAXIS_ACTION_ERR_SLOT_EMPTY;
+        }
+        ok = backend->backup_slot(save_path, slot, temp_path, comp_level_to_lzma(cl));
     } else {
-        return false;
+        return PRAXIS_ACTION_ERR_IO;
     }
 
     if (!ok) {
         DeleteFileW(temp_path);
-        return false;
+        return PRAXIS_ACTION_ERR_IO;
     }
 
     if (!commit_replace_temp_file(temp_path, selected_path)) {
-        return false;
+        return PRAXIS_ACTION_ERR_IO;
     }
 
     save_tree_refresh(save_tree);
     save_tree_select_full_path(save_tree, selected_path);
-    return true;
+    return PRAXIS_ACTION_OK;
 }
 
-bool praxis_hotkey_action_restore(HWND hwnd, profile_store_t *store, save_tree_t *save_tree) {
+praxis_action_result_t praxis_hotkey_action_restore(HWND hwnd, profile_store_t *store, save_tree_t *save_tree) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
     const game_backend_t *backend = get_active_backend_for(store);
     wchar_t selected_path[MAX_PATH] = {0};
@@ -367,28 +402,40 @@ bool praxis_hotkey_action_restore(HWND hwnd, profile_store_t *store, save_tree_t
 
     (void)hwnd;
 
-    if (!bp || !backend || !save_tree ||
-        !save_tree_get_selected_path(save_tree, selected_path, MAX_PATH) || !selected_path[0] ||
-        !resolve_save_path_for(store, save_path, MAX_PATH) ||
-        !profile_store_resolve_backup_root(store, bp->id, backup_root, MAX_PATH) ||
-        !ring_backup_init(backup_root, praxis_config.ring_size)) {
-        return false;
+    if (!bp) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!backend || !save_tree) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!save_tree_get_selected_path(save_tree, selected_path, MAX_PATH) || !selected_path[0]) {
+        return PRAXIS_ACTION_ERR_NO_SELECTION;
+    }
+    if (!resolve_save_path_for(store, save_path, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_SAVE_NOT_FOUND;
+    }
+    if (!profile_store_resolve_backup_root(store, bp->id, backup_root, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!ring_backup_init(backup_root, praxis_config.ring_size)) {
+        return PRAXIS_ACTION_ERR_RING_BACKUP;
     }
 
     ok = restore_safe_auto(backend, selected_path, save_path, backup_root,
         comp_level_to_lzma(bp->compression_level));
-    if (ok && save_tree) {
-        /* Preserve the current selection across the refresh so the user keeps
-         * focus on the backup they just restored. The walk-up logic in
-         * save_tree_refresh_preserve_selection() also handles the rare case
-         * where the selected backup was somehow removed during the restore. */
-        save_tree_refresh_preserve_selection(save_tree);
+    if (!ok) {
+        return PRAXIS_ACTION_ERR_IO;
     }
 
-    return ok;
+    /* Preserve the current selection across the refresh so the user keeps
+     * focus on the backup they just restored. The walk-up logic in
+     * save_tree_refresh_preserve_selection() also handles the rare case
+     * where the selected backup was somehow removed during the restore. */
+    save_tree_refresh_preserve_selection(save_tree);
+    return PRAXIS_ACTION_OK;
 }
 
-bool praxis_hotkey_action_undo(HWND hwnd, profile_store_t *store) {
+praxis_action_result_t praxis_hotkey_action_undo(HWND hwnd, profile_store_t *store) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
     const game_backend_t *backend = get_active_backend_for(store);
     wchar_t backup_root[MAX_PATH];
@@ -396,13 +443,23 @@ bool praxis_hotkey_action_undo(HWND hwnd, profile_store_t *store) {
 
     (void)hwnd;
 
-    if (!bp || !backend ||
-        !profile_store_resolve_backup_root(store, bp->id, backup_root, MAX_PATH) ||
-        !ring_backup_init(backup_root, praxis_config.ring_size)) {
-        return false;
+    if (!bp) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!backend) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!profile_store_resolve_backup_root(store, bp->id, backup_root, MAX_PATH)) {
+        return PRAXIS_ACTION_ERR_NO_PROFILE;
+    }
+    if (!ring_backup_init(backup_root, praxis_config.ring_size)) {
+        return PRAXIS_ACTION_ERR_NO_UNDO;
     }
 
     ok = restore_safe_undo(backend, backup_root,
         comp_level_to_lzma(bp->compression_level));
-    return ok;
+    if (!ok) {
+        return PRAXIS_ACTION_ERR_NO_UNDO;
+    }
+    return PRAXIS_ACTION_OK;
 }
