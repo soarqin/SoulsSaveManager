@@ -64,7 +64,15 @@ static void kv_callback(const char *key, const char *value, void *user) {
     } else if (strcmp(key, "WindowHeight") == 0) {
         cfg->window_height = config_core_parse_int(value, 0);
     } else if (strcmp(key, "CompressionLevel") == 0) {
-        cfg->compression_level = config_core_parse_int(value, 5);
+        /* [Settings] CompressionLevel is a legacy compat field; the active
+         * backup profile's compression_level is the authoritative source.
+         * Accept both the new string form (none/low/medium/high) and the
+         * legacy integer form (1/5/9) so older INI files keep loading. */
+        if (strcmp(value, "none") == 0)        cfg->compression_level = 1;
+        else if (strcmp(value, "low") == 0)    cfg->compression_level = 1;
+        else if (strcmp(value, "medium") == 0) cfg->compression_level = 5;
+        else if (strcmp(value, "high") == 0)   cfg->compression_level = 9;
+        else cfg->compression_level = config_core_parse_int(value, 5); /* legacy integer */
     } else if (strcmp(key, "RingSize") == 0) {
         cfg->ring_size = config_core_parse_int(value, 5);
     } else if (strcmp(key, "HotkeyBackupFull") == 0) {

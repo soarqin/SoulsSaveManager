@@ -40,9 +40,9 @@ typedef struct game_profile_s {
 
 /**
  * @brief Backup profile: represents a named backup configuration for a game.
- * @details Stores backup-specific settings including compression level. The on-disk
- *          backup root is computed from the parent game profile's tree_root and the
- *          backup profile name.
+ * @details Stores backup-specific settings including compression level. The
+ *          on-disk backup root is computed from the parent game profile's
+ *          tree_root and the backup profile name.
  *          id >= 1 is valid; id == 0 is invalid/uninitialized.
  */
 typedef struct backup_profile_s {

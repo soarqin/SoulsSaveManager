@@ -55,6 +55,7 @@ static void load_section_cb(const char *section, void *user) {
 
     ZeroMemory(&ctx->cur_game, sizeof(ctx->cur_game));
     ZeroMemory(&ctx->cur_backup, sizeof(ctx->cur_backup));
+    ctx->cur_backup.compression_level = COMP_LEVEL_MEDIUM; /* default when key is absent */
     ctx->current_section_id = 0;
 
     /* Classify the incoming section name. */
@@ -263,20 +264,15 @@ bool profile_store_io_save(const profile_store_t *store, const wchar_t *ini_path
                             tree_root_utf8, (int)sizeof(tree_root_utf8), NULL, NULL);
     }
 
-    /* Map backup compression level to legacy integer (none→1, low→1, medium→5, high→9). */
-    int legacy_comp;
-    if (active_bp != NULL) {
-        switch (active_bp->compression_level) {
-        case COMP_LEVEL_NONE:   legacy_comp = 1; break;
-        case COMP_LEVEL_MEDIUM: legacy_comp = 5; break;
-        case COMP_LEVEL_HIGH:   legacy_comp = 9; break;
-        default:                legacy_comp = 1; break; /* COMP_LEVEL_LOW */
-        }
-    } else {
-        legacy_comp = praxis_config.compression_level;
-        if (legacy_comp <= 0) {
-            legacy_comp = 5; /* safe default if praxis_config was not initialized */
-        }
+    /* Map active backup compression level to a string for the legacy
+     * [Settings] CompressionLevel field. praxis_load_config still accepts
+     * the legacy integer form (1/5/9) so older INI files keep loading. */
+    const char *legacy_comp_str;
+    switch (active_bp ? active_bp->compression_level : COMP_LEVEL_MEDIUM) {
+    case COMP_LEVEL_NONE:   legacy_comp_str = "none";   break;
+    case COMP_LEVEL_HIGH:   legacy_comp_str = "high";   break;
+    case COMP_LEVEL_LOW:    legacy_comp_str = "low";    break;
+    default:                legacy_comp_str = "medium"; break;
     }
 
     /* Convert hotkey strings from wide to UTF-8. */
@@ -313,7 +309,7 @@ bool profile_store_io_save(const profile_store_t *store, const wchar_t *ini_path
     config_core_buf_append(&buf, "WindowY=%d\r\n", praxis_config.window_y);
     config_core_buf_append(&buf, "WindowWidth=%d\r\n", praxis_config.window_width);
     config_core_buf_append(&buf, "WindowHeight=%d\r\n", praxis_config.window_height);
-    config_core_buf_append(&buf, "CompressionLevel=%d\r\n", legacy_comp);
+    config_core_buf_append(&buf, "CompressionLevel=%s\r\n", legacy_comp_str);
     config_core_buf_append(&buf, "RingSize=%d\r\n", praxis_config.ring_size);
     config_core_buf_append(&buf, "HotkeyBackupFull=%s\r\n", hotkey_bf);
     config_core_buf_append(&buf, "HotkeyBackupSlot=%s\r\n", hotkey_bs);
