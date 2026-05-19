@@ -7,9 +7,12 @@
 
 /* Forward declaration — defined in backends/er_backend.c */
 extern const game_backend_t er_backend;
+/* Forward declaration — defined in backends/ds3_backend.c */
+extern const game_backend_t ds3_backend;
 
 static const game_backend_t *const g_backends[] = {
-    &er_backend
+    &er_backend,
+    &ds3_backend
 };
 
 #define BACKEND_COUNT (sizeof(g_backends) / sizeof(g_backends[0]))

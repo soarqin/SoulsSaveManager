@@ -13,7 +13,8 @@
 
 typedef enum game_id_e {
     GAME_ID_ELDEN_RING = 1,
-    /* Future: GAME_ID_DARK_SOULS_3, GAME_ID_SEKIRO, GAME_ID_NIGHTREIGN */
+    GAME_ID_DARK_SOULS_3 = 2,
+    /* Future: GAME_ID_SEKIRO, GAME_ID_NIGHTREIGN */
 } game_id_t;
 
 typedef struct game_backend_s {
