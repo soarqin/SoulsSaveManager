@@ -20,8 +20,10 @@ typedef enum game_id_e {
 typedef struct game_backend_s {
     game_id_t id;
     const wchar_t *display_name;        /* e.g. L"Elden Ring" */
-    const wchar_t *backup_extension;    /* e.g. L".ersm" */
+    const wchar_t *backup_extension;    /* e.g. L".ersm" (Elden Ring), L".ds3sm" (Dark Souls III) */
+    const wchar_t *save_filename;       /* e.g. L"ER0000.sl2" — appended to original_save_dir */
     bool needs_game_restart;            /* false for FromSoft titles */
+    bool full_save_skip_compression;    /* true = always raw-copy full saves (e.g. encrypted saves) */
 
     /* MANDATORY methods */
     bool (*resolve_save_path)(wchar_t *out_path, size_t out_chars);

@@ -120,7 +120,14 @@ static bool ds3_resolve_save_path(wchar_t *out, size_t out_chars) {
     return found;
 }
 
+/* DS3 save files are AES-128-CBC encrypted at the slot level; encrypted data
+ * has near-random entropy and is effectively incompressible. Always write a
+ * raw BND4 copy and ignore the requested compression level. The restore path
+ * (ds3_restore_full) detects raw vs. compressed via ersm_detect_file_format
+ * and handles both formats. */
 static bool ds3_backup_full(const wchar_t *src, const wchar_t *dst, int level) {
+    (void)level;
+
     HANDLE file = CreateFileW(src, GENERIC_READ,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -152,7 +159,7 @@ static bool ds3_backup_full(const wchar_t *src, const wchar_t *dst, int level) {
         return false;
     }
 
-    bool ok = ersm_compress_to_file(dst, buf, file_size, ERSM_TYPE_FULL_SAVE, level);
+    bool ok = ersm_write_raw_bnd4_to_file(dst, buf, file_size);
     LocalFree(buf);
     return ok;
 }
@@ -286,8 +293,10 @@ static bool ds3_restore_slot(const wchar_t *src_backup, const wchar_t *dst_save,
 const game_backend_t ds3_backend = {
     .id = GAME_ID_DARK_SOULS_3,
     .display_name = L"Dark Souls III",
-    .backup_extension = L".ersm",
+    .backup_extension = L".ds3sm",
+    .save_filename = L"DS30000.sl2",
     .needs_game_restart = false,
+    .full_save_skip_compression = true,
     .resolve_save_path = ds3_resolve_save_path,
     .backup_full = ds3_backup_full,
     .restore_full = ds3_restore_full,
