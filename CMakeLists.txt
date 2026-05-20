@@ -9,7 +9,7 @@ fix_compile_flags()
 fix_release_flags(STRIP_BINARY ON USE_LTO OFF USE_STATIC_CRT ON)
 include(ProjectMacros)
 
-project(ERSaveManager)
+project(SoulsSaveManager)
 
 add_subdirectory(deps)
 add_subdirectory(src)
