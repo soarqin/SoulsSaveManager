@@ -1,6 +1,9 @@
 add_project(ersave_common STATIC
     ersave.c ersave.h
     ds3save.c ds3save.h
+    dsrsave.c dsrsave.h
+    ds2save.c ds2save.h
+    sekirosave.c sekirosave.h
     file_dialog.c file_dialog.h
     save_compress.c save_compress.h
     locale_core.c locale_core.h
