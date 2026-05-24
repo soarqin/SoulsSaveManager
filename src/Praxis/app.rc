@@ -82,7 +82,7 @@ BEGIN
     EDITTEXT        IDC_EGP_NAME, 60, 6, 212, 14, ES_AUTOHSCROLL
     LTEXT           "Game:",        IDC_EGP_LBL_GAME,      8, 28, 48, 8
     COMBOBOX        IDC_EGP_GAME, 60, 26, 212, 80, CBS_DROPDOWNLIST | WS_TABSTOP
-    LTEXT           "Save Dir:",    IDC_EGP_LBL_SAVE_DIR,  8, 48, 48, 8
+    LTEXT           "Save File:",   IDC_EGP_LBL_SAVE_DIR,  8, 48, 48, 8
     EDITTEXT        IDC_EGP_SAVE_DIR, 60, 46, 180, 14, ES_AUTOHSCROLL
     PUSHBUTTON      "...", IDC_EGP_BROWSE_SAVE, 244, 46, 28, 14
     LTEXT           "Backup Root:", IDC_EGP_LBL_TREE_ROOT, 8, 68, 48, 8

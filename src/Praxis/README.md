@@ -53,7 +53,7 @@ Praxis uses a compile-time vtable (`game_backend_t`) defined in `src/Praxis/game
 
 Praxis 2.0 introduces a multi-profile system:
 
-- **Game Profiles** — One entry per game/account combination. Each game profile has a name, game type, optional override for the save directory, and a backup root directory.
+- **Game Profiles** — One entry per game/account combination. Each game profile has a name, game type, optional override for the save file, and a backup root directory.
 - **Backup Profiles** — Subordinate to a game profile. Each backup profile defines a tree root directory and compression level. You can have multiple backup profiles per game (e.g., `Main`, `SpeedrunPractice`, `PvP`).
 
 ### Profile Hierarchy

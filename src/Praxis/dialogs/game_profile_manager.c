@@ -86,7 +86,7 @@ static const wchar_t *game_id_display_name(game_id_t gid) {
 }
 
 /* Initialize ListView columns once on dialog creation. The two path columns
- * (Save Dir / Tree Root) absorb the remaining width so the four columns fill
+ * (Save File / Tree Root) absorb the remaining width so the four columns fill
  * the listview client area without leaving empty space. */
 static void gpm_init_columns(HWND list) {
     LVCOLUMNW col;

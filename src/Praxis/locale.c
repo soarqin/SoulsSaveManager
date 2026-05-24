@@ -61,7 +61,7 @@ static const wchar_t *praxis_locale_strings[11][STR_PRAXIS_MAX] = {
         L"Manage Game Profiles...",
         L"Name",
         L"Game",
-        L"Save Directory",
+        L"Save File",
         L"Backup Root",
         L"Compression",
         L"None",
