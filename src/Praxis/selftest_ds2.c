@@ -163,10 +163,16 @@ static void ds2_st_aes_close(BCRYPT_ALG_HANDLE alg, BCRYPT_KEY_HANDLE key, uint8
  * faithful to real DS2S saves.
  *
  * Char slot 0 plaintext markers (used by ds2s-dual-slot-roundtrip):
- *   - part A (entry 1) : all 0xAA bytes
- *   - part B (entry 11): all 0xBB bytes
+ *   - part A (entry 1) : 4-byte header is 0xA0, payload is 0xAA
+ *   - part B (entry 11): 4-byte header is 0xB0, payload is 0xBB
  */
 #define DS2_EXTRA_ENTRY_SIZE 16u
+#define DS2_TEST_SLOT_HEADER_SIZE 4u
+#define DS2_TEST_CHAR_A_SERIALIZED_SIZE (DS2_CHAR_A_PLAINTEXT_SIZE - DS2_TEST_SLOT_HEADER_SIZE)
+#define DS2_TEST_CHAR_B_SERIALIZED_SIZE (DS2_CHAR_B_PLAINTEXT_SIZE - DS2_TEST_SLOT_HEADER_SIZE)
+#define DS2_TEST_SUMMARY_USERID_TEXT_OFFSET (DS2_SUMMARY_USERID_TEXT_OFFSET + DS2_TEST_SLOT_HEADER_SIZE)
+#define DS2_TEST_SUMMARY_ACTIVE_OFFSET (DS2_SUMMARY_ACTIVE_OFFSET + DS2_TEST_SLOT_HEADER_SIZE)
+#define DS2_TEST_SUMMARY_PROFILE_OFFSET (DS2_SUMMARY_PROFILE_OFFSET + DS2_TEST_SLOT_HEADER_SIZE)
 
 static bool praxis_make_min_valid_ds2_sl2(const wchar_t *path, const char *userid_hex16) {
     const uint32_t header_size = DS2_BND4_FILE_HEADER_SIZE;
@@ -267,18 +273,22 @@ static bool praxis_make_min_valid_ds2_sl2(const wchar_t *path, const char *useri
 
         /* Populate slot-specific fields in plaintext */
         if (i == 0) {
-            /* Summary slot: Steam ID text @ 0x39, active=0 @ 0x36C, profile[0] flag=1 */
-            CopyMemory(plaintext + DS2_SUMMARY_USERID_TEXT_OFFSET, userid_hex16,
+            /* Summary slot: Steam ID text @ 0x3D, active=0 @ 0x370, profile[0] flag=1 */
+            CopyMemory(plaintext + DS2_TEST_SUMMARY_USERID_TEXT_OFFSET, userid_hex16,
                        DS2_USERID_TEXT_LENGTH);
-            *(int32_t *)(plaintext + DS2_SUMMARY_ACTIVE_OFFSET) = 0;
-            *(int32_t *)(plaintext + DS2_SUMMARY_PROFILE_OFFSET
-                         + DS2_PROFILE_AVAILABLE_FLAG_OFFSET) = 1;
+            *(int32_t *)(plaintext + DS2_TEST_SUMMARY_ACTIVE_OFFSET) = 0;
+            *(int32_t *)(plaintext + DS2_TEST_SUMMARY_PROFILE_OFFSET
+                          + DS2_PROFILE_AVAILABLE_FLAG_OFFSET) = 1;
         } else if (i == 1) {
             /* Char slot 0 part A: distinguishable marker for dual-slot test */
-            FillMemory(plaintext, char_a_pt_size, 0xAA);
+            FillMemory(plaintext, DS2_TEST_SLOT_HEADER_SIZE, 0xA0);
+            FillMemory(plaintext + DS2_TEST_SLOT_HEADER_SIZE,
+                       char_a_pt_size - DS2_TEST_SLOT_HEADER_SIZE, 0xAA);
         } else if (i == 11) {
             /* Char slot 0 part B: distinguishable marker for dual-slot test */
-            FillMemory(plaintext, char_b_pt_size, 0xBB);
+            FillMemory(plaintext, DS2_TEST_SLOT_HEADER_SIZE, 0xB0);
+            FillMemory(plaintext + DS2_TEST_SLOT_HEADER_SIZE,
+                       char_b_pt_size - DS2_TEST_SLOT_HEADER_SIZE, 0xBB);
         }
 
         /* Write IV into the file buffer right after the 16-byte MD5 header */
@@ -440,7 +450,7 @@ static bool ds2_st_set_summary_profile_flag(const wchar_t *path, int slot, int32
         return false;
     }
 
-    flag_offset = DS2_SUMMARY_PROFILE_OFFSET
+    flag_offset = DS2_TEST_SUMMARY_PROFILE_OFFSET
                   + (uint32_t)slot * DS2_PROFILE_SIZE
                   + DS2_PROFILE_AVAILABLE_FLAG_OFFSET;
     *(int32_t *)(pt + flag_offset) = flag_value;
@@ -967,8 +977,8 @@ static int cmd_ds2s_active_slot(int argc, wchar_t **argv) {
 /* 6. ds2s-dual-slot-roundtrip <tmp>
  * Build fixture, load, serialize slot 0. Assert the serialized buffer:
  *   - has size DS2_CHAR_DATA_SERIALIZED_SIZE
- *   - first DS2_CHAR_A_PLAINTEXT_SIZE bytes are all 0xAA (part A marker)
- *   - next DS2_CHAR_B_PLAINTEXT_SIZE bytes are all 0xBB (part B marker)
+ *   - first DS2_TEST_CHAR_A_SERIALIZED_SIZE bytes are all 0xAA (part A payload marker)
+ *   - next DS2_TEST_CHAR_B_SERIALIZED_SIZE bytes are all 0xBB (part B payload marker)
  * Verifies that the dual-slot abstraction round-trips part A and part B
  * into the correct sub-regions of the serialized blob.
  * DESTRUCTIVE: deletes <tmp>. */
@@ -1005,8 +1015,8 @@ static int cmd_ds2s_dual_slot_roundtrip(int argc, wchar_t **argv) {
     }
 
     ser_buf = (uint8_t *)LocalAlloc(LMEM_FIXED, DS2_CHAR_DATA_SERIALIZED_SIZE);
-    expected_a = (uint8_t *)LocalAlloc(LMEM_FIXED, DS2_CHAR_A_PLAINTEXT_SIZE);
-    expected_b = (uint8_t *)LocalAlloc(LMEM_FIXED, DS2_CHAR_B_PLAINTEXT_SIZE);
+    expected_a = (uint8_t *)LocalAlloc(LMEM_FIXED, DS2_TEST_CHAR_A_SERIALIZED_SIZE);
+    expected_b = (uint8_t *)LocalAlloc(LMEM_FIXED, DS2_TEST_CHAR_B_SERIALIZED_SIZE);
     if (!ser_buf || !expected_a || !expected_b) {
         if (ser_buf) LocalFree(ser_buf);
         if (expected_a) LocalFree(expected_a);
@@ -1017,8 +1027,8 @@ static int cmd_ds2s_dual_slot_roundtrip(int argc, wchar_t **argv) {
         return 1;
     }
 
-    FillMemory(expected_a, DS2_CHAR_A_PLAINTEXT_SIZE, 0xAA);
-    FillMemory(expected_b, DS2_CHAR_B_PLAINTEXT_SIZE, 0xBB);
+    FillMemory(expected_a, DS2_TEST_CHAR_A_SERIALIZED_SIZE, 0xAA);
+    FillMemory(expected_b, DS2_TEST_CHAR_B_SERIALIZED_SIZE, 0xBB);
 
     /* Reject buf_size = DS2_CHAR_DATA_SERIALIZED_SIZE - 1 to confirm size gate */
     if (ds2_char_data_serialize(c0, ser_buf, DS2_CHAR_DATA_SERIALIZED_SIZE - 1)) {
@@ -1037,11 +1047,11 @@ static int cmd_ds2s_dual_slot_roundtrip(int argc, wchar_t **argv) {
         return 1;
     }
 
-    ok = (RtlCompareMemory(ser_buf, expected_a, DS2_CHAR_A_PLAINTEXT_SIZE)
-              == DS2_CHAR_A_PLAINTEXT_SIZE)
-         && (RtlCompareMemory(ser_buf + DS2_CHAR_A_PLAINTEXT_SIZE, expected_b,
-                              DS2_CHAR_B_PLAINTEXT_SIZE)
-              == DS2_CHAR_B_PLAINTEXT_SIZE);
+    ok = (RtlCompareMemory(ser_buf, expected_a, DS2_TEST_CHAR_A_SERIALIZED_SIZE)
+              == DS2_TEST_CHAR_A_SERIALIZED_SIZE)
+         && (RtlCompareMemory(ser_buf + DS2_TEST_CHAR_A_SERIALIZED_SIZE, expected_b,
+                              DS2_TEST_CHAR_B_SERIALIZED_SIZE)
+              == DS2_TEST_CHAR_B_SERIALIZED_SIZE);
 
     LocalFree(ser_buf); LocalFree(expected_a); LocalFree(expected_b);
     ds2_save_data_free(save);
@@ -1059,7 +1069,7 @@ static int cmd_ds2s_dual_slot_roundtrip(int argc, wchar_t **argv) {
  * Build srcA with userid_hex16 DS2_TEST_USERID_A_HEX.
  * Build dstB with userid_hex16 DS2_TEST_USERID_B_HEX.
  * Import slot 0 from A into B. Reload B and assert that B's summary
- * Steam ID at offset 0x39 is unchanged (still DS2_TEST_USERID_B_HEX) -
+ * Steam ID at offset 0x3D is unchanged (still DS2_TEST_USERID_B_HEX) -
  * import must preserve the destination's userid (the "re-sign" semantic).
  * DESTRUCTIVE: deletes both <srcA> and <dstB>. */
 static int cmd_ds2s_import_resigns_userid_text(int argc, wchar_t **argv) {
@@ -1142,7 +1152,7 @@ static int cmd_ds2s_import_resigns_userid_text(int argc, wchar_t **argv) {
         return 1;
     }
 
-    ok = (RtlCompareMemory(summary_pt + DS2_SUMMARY_USERID_TEXT_OFFSET,
+    ok = (RtlCompareMemory(summary_pt + DS2_TEST_SUMMARY_USERID_TEXT_OFFSET,
                            DS2_TEST_USERID_B_HEX, DS2_USERID_TEXT_LENGTH)
             == DS2_USERID_TEXT_LENGTH);
 

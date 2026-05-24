@@ -14,9 +14,9 @@
 typedef struct dsr_save_data_s dsr_save_data_t;
 typedef struct dsr_char_data_s dsr_char_data_t;
 
-/* DSR_CHAR_DATA_SERIALIZED_SIZE = DSR_CHAR_PLAINTEXT_SIZE + DSR_PROFILE_SIZE
- * = 0x60010 + 0x190 = 0x601A0 */
-#define DSR_CHAR_DATA_SERIALIZED_SIZE  0x601A0u
+/* DSR_CHAR_DATA_SERIALIZED_SIZE = (DSR_CHAR_PLAINTEXT_SIZE - DSR_SLOT_HEADER_SIZE) + DSR_PROFILE_SIZE
+ * = (0x60010 - 4) + 0x190 = 0x6019C */
+#define DSR_CHAR_DATA_SERIALIZED_SIZE  0x6019Cu
 
 /**
  * @brief Loads save data from a file.

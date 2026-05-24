@@ -5,7 +5,7 @@
  *          Modeled after ds3save.c with four deltas:
  *          (1) different AES key,
  *          (2) different summary offsets,
- *          (3) 1-byte active slot at 0x45 (not the DS3 four-byte field),
+ *          (3) 1-byte active slot at game-data offset 0x45 (not the DS3 four-byte field),
  *          (4) no Steam ID re-signing in import_raw.
  */
 
@@ -37,12 +37,13 @@
 /* Profile size */
 #define DSR_PROFILE_SIZE            0x190u
 
-/* Summary offsets (within decrypted plaintext) */
+/* Summary offsets (within game data after the 4-byte plaintext slot header) */
 #define DSR_SUMMARY_ACTIVE_OFFSET    0x45u   /* uint8 — 1 BYTE */
 #define DSR_SUMMARY_AVAILABLE_OFFSET 0xB0u   /* 10 bytes, 1 per slot */
 #define DSR_SUMMARY_PROFILE_OFFSET   0xC0u
 
-#define DSR_SLOT_HEADER_SIZE         32u      /* 16-byte MD5 + 16-byte IV */
+#define DSR_SLOT_HEADER_SIZE         4u       /* 4-byte internal header before game data in each decrypted slot */
+#define DSR_SLOT_FILE_HEADER_SIZE    32u      /* 16-byte MD5 + 16-byte IV */
 #define DSR_HEADER_SLOT_COUNT_OFFSET 0x0Cu
 #define DSR_HEADER_SLOT_SIZE_BASE    0x48u
 #define DSR_HEADER_SLOT_OFFSET_BASE  0x50u
@@ -191,20 +192,20 @@ static bool dsr_write_at(HANDLE file, uint32_t offset, const uint8_t *buf, DWORD
 }
 
 static bool dsr_decrypt_slot(BCRYPT_KEY_HANDLE key, const uint8_t *file_data, uint32_t file_size, uint32_t slot_offset, uint32_t slot_size, uint8_t *out_plaintext, uint32_t plaintext_size) {
-    if (!key || !file_data || !out_plaintext || slot_size < DSR_SLOT_HEADER_SIZE) {
+    if (!key || !file_data || !out_plaintext || slot_size < DSR_SLOT_FILE_HEADER_SIZE) {
         return false;
     }
     if (!slot_range_is_valid(file_size, slot_offset, slot_size)) {
         return false;
     }
 
-    uint32_t ciphertext_size = slot_size - DSR_SLOT_HEADER_SIZE;
+    uint32_t ciphertext_size = slot_size - DSR_SLOT_FILE_HEADER_SIZE;
     if (ciphertext_size != plaintext_size) {
         return false;
     }
 
     const uint8_t *iv = file_data + slot_offset + 16;
-    const uint8_t *ciphertext = file_data + slot_offset + DSR_SLOT_HEADER_SIZE;
+    const uint8_t *ciphertext = file_data + slot_offset + DSR_SLOT_FILE_HEADER_SIZE;
     return dsr_aes_decrypt(key, iv, ciphertext, ciphertext_size, out_plaintext, plaintext_size);
 }
 
@@ -298,14 +299,14 @@ bool dsr_save_data_load(const wchar_t *path, dsr_save_data_t **out_save) {
     }
 
     for (int i = 0; i < DSR_SLOT_COUNT; i++) {
-        if (save->summary_plaintext[DSR_SUMMARY_AVAILABLE_OFFSET + i] != 0) {
+        if (save->summary_plaintext[DSR_SUMMARY_AVAILABLE_OFFSET + DSR_SLOT_HEADER_SIZE + i] != 0) {
             if (!dsr_decrypt_slot(key, file_data, file_size, save->slot_offset[i], save->slot_size[i], save->chars[i].plaintext, DSR_CHAR_PLAINTEXT_SIZE)) {
                 dsr_aes_close(alg, key);
                 LocalFree(save);
                 LocalFree(file_data);
                 return false;
             }
-            CopyMemory(save->chars[i].profile, save->summary_plaintext + DSR_SUMMARY_PROFILE_OFFSET + DSR_PROFILE_SIZE * i, DSR_PROFILE_SIZE);
+            CopyMemory(save->chars[i].profile, save->summary_plaintext + DSR_SUMMARY_PROFILE_OFFSET + DSR_SLOT_HEADER_SIZE + DSR_PROFILE_SIZE * i, DSR_PROFILE_SIZE);
             save->chars[i].available = true;
         }
     }
@@ -328,8 +329,8 @@ bool dsr_save_get_active_slot(const dsr_save_data_t *save, int *out_slot) {
         return false;
     }
 
-    /* CRITICAL: DSR uses 1 BYTE at offset 0x45, not the DS3 four-byte field. */
-    uint8_t active = save->summary_plaintext[DSR_SUMMARY_ACTIVE_OFFSET];
+    /* CRITICAL: DSR uses 1 BYTE at game-data offset 0x45, not the DS3 four-byte field. */
+    uint8_t active = save->summary_plaintext[DSR_SUMMARY_ACTIVE_OFFSET + DSR_SLOT_HEADER_SIZE];
     if (active >= DSR_SLOT_COUNT) {
         return false;
     }
@@ -354,8 +355,8 @@ bool dsr_char_data_serialize(const dsr_char_data_t *char_data, uint8_t *out_buf,
         return false;
     }
 
-    CopyMemory(out_buf, char_data->plaintext, DSR_CHAR_PLAINTEXT_SIZE);
-    CopyMemory(out_buf + DSR_CHAR_PLAINTEXT_SIZE, char_data->profile, DSR_PROFILE_SIZE);
+    CopyMemory(out_buf, char_data->plaintext + DSR_SLOT_HEADER_SIZE, DSR_CHAR_PLAINTEXT_SIZE - DSR_SLOT_HEADER_SIZE);
+    CopyMemory(out_buf + (DSR_CHAR_PLAINTEXT_SIZE - DSR_SLOT_HEADER_SIZE), char_data->profile, DSR_PROFILE_SIZE);
     return true;
 }
 
@@ -364,11 +365,11 @@ bool dsr_char_data_import_raw(dsr_save_data_t *save, int slot, const uint8_t *ra
         return false;
     }
 
-    CopyMemory(save->chars[slot].plaintext, raw_data, DSR_CHAR_PLAINTEXT_SIZE);
-    CopyMemory(save->chars[slot].profile, raw_data + DSR_CHAR_PLAINTEXT_SIZE, DSR_PROFILE_SIZE);
+    CopyMemory(save->chars[slot].plaintext + DSR_SLOT_HEADER_SIZE, raw_data, DSR_CHAR_PLAINTEXT_SIZE - DSR_SLOT_HEADER_SIZE);
+    CopyMemory(save->chars[slot].profile, raw_data + (DSR_CHAR_PLAINTEXT_SIZE - DSR_SLOT_HEADER_SIZE), DSR_PROFILE_SIZE);
     save->chars[slot].available = true;
-    CopyMemory(save->summary_plaintext + DSR_SUMMARY_PROFILE_OFFSET + slot * DSR_PROFILE_SIZE, raw_data + DSR_CHAR_PLAINTEXT_SIZE, DSR_PROFILE_SIZE);
-    save->summary_plaintext[DSR_SUMMARY_AVAILABLE_OFFSET + slot] = 1;
+    CopyMemory(save->summary_plaintext + DSR_SUMMARY_PROFILE_OFFSET + DSR_SLOT_HEADER_SIZE + slot * DSR_PROFILE_SIZE, raw_data + (DSR_CHAR_PLAINTEXT_SIZE - DSR_SLOT_HEADER_SIZE), DSR_PROFILE_SIZE);
+    save->summary_plaintext[DSR_SUMMARY_AVAILABLE_OFFSET + DSR_SLOT_HEADER_SIZE + slot] = 1;
 
     BCRYPT_ALG_HANDLE alg = NULL;
     BCRYPT_KEY_HANDLE key = NULL;
@@ -382,8 +383,8 @@ bool dsr_char_data_import_raw(dsr_save_data_t *save, int slot, const uint8_t *ra
         return false;
     }
 
-    uint32_t char_ciphertext_capacity = save->slot_size[slot] - DSR_SLOT_HEADER_SIZE;
-    uint32_t summary_ciphertext_capacity = save->slot_size[DSR_SUMMARY_INDEX] - DSR_SLOT_HEADER_SIZE;
+    uint32_t char_ciphertext_capacity = save->slot_size[slot] - DSR_SLOT_FILE_HEADER_SIZE;
+    uint32_t summary_ciphertext_capacity = save->slot_size[DSR_SUMMARY_INDEX] - DSR_SLOT_FILE_HEADER_SIZE;
     uint32_t ciphertext_capacity = char_ciphertext_capacity > summary_ciphertext_capacity
         ? char_ciphertext_capacity : summary_ciphertext_capacity;
     uint8_t *ciphertext = LocalAlloc(LMEM_FIXED, ciphertext_capacity);
@@ -414,7 +415,7 @@ bool dsr_char_data_import_raw(dsr_save_data_t *save, int slot, const uint8_t *ra
     if (!dsr_md5_iv_ct(iv, ciphertext, ciphertext_size, md5)
         || !dsr_write_at(file, save->slot_offset[slot], md5, sizeof(md5))
         || !dsr_write_at(file, save->slot_offset[slot] + 16, iv, sizeof(iv))
-        || !dsr_write_at(file, save->slot_offset[slot] + DSR_SLOT_HEADER_SIZE, ciphertext, ciphertext_size)) {
+        || !dsr_write_at(file, save->slot_offset[slot] + DSR_SLOT_FILE_HEADER_SIZE, ciphertext, ciphertext_size)) {
         LocalFree(ciphertext);
         CloseHandle(file);
         dsr_aes_close(alg, key);
@@ -441,7 +442,7 @@ bool dsr_char_data_import_raw(dsr_save_data_t *save, int slot, const uint8_t *ra
     if (!dsr_md5_iv_ct(summary_iv, ciphertext, summary_ciphertext_size, md5)
         || !dsr_write_at(file, save->slot_offset[DSR_SUMMARY_INDEX], md5, sizeof(md5))
         || !dsr_write_at(file, save->slot_offset[DSR_SUMMARY_INDEX] + 16, summary_iv, sizeof(summary_iv))
-        || !dsr_write_at(file, save->slot_offset[DSR_SUMMARY_INDEX] + DSR_SLOT_HEADER_SIZE, ciphertext, summary_ciphertext_size)) {
+        || !dsr_write_at(file, save->slot_offset[DSR_SUMMARY_INDEX] + DSR_SLOT_FILE_HEADER_SIZE, ciphertext, summary_ciphertext_size)) {
         LocalFree(ciphertext);
         CloseHandle(file);
         dsr_aes_close(alg, key);

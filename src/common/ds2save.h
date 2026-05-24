@@ -14,9 +14,9 @@
 typedef struct ds2_save_data_s ds2_save_data_t;
 typedef struct ds2_char_data_s ds2_char_data_t;
 
-/* DS2_CHAR_DATA_SERIALIZED_SIZE = DS2_CHAR_A_PLAINTEXT_SIZE + DS2_CHAR_B_PLAINTEXT_SIZE + DS2_PROFILE_SIZE
- * = 0x1B2C0 + 0x7A8B0 + 0x1F0 = 0x95BC0 */
-#define DS2_CHAR_DATA_SERIALIZED_SIZE  0x95D60u
+/* DS2_CHAR_DATA_SERIALIZED_SIZE skips each char part's 4-byte internal plaintext header.
+ * = (0x1B2C0 - 4) + (0x7A8B0 - 4) + 0x1F0 = 0x95D58 */
+#define DS2_CHAR_DATA_SERIALIZED_SIZE  0x95D58u
 
 bool ds2_save_data_load(const wchar_t *path, ds2_save_data_t **out_save);
 void ds2_save_data_free(ds2_save_data_t *save);

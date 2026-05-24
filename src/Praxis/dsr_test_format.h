@@ -58,11 +58,13 @@ static const uint8_t DSR_AES_KEY_BYTES[16] = {
 #define DSR_BND4_ENTRY_STRIDE        0x20u   /* Stride between slot entries in BND4 arrays */
 #define DSR_BND4_FILE_HEADER_SIZE    0x300u  /* BND4 file header size */
 
-/* DSR summary slot payload offsets (within decrypted plaintext).
- * NOTE: active_slot is a 1-BYTE field in DSR (not int32 like DS3). */
-#define DSR_SUMMARY_ACTIVE_OFFSET    0x45u   /* Active slot index (uint8) in summary plaintext — VERIFIED via T1 */
-#define DSR_SUMMARY_AVAILABLE_OFFSET 0xB0u   /* Available slots: 10 bytes, 1 byte per slot — VERIFIED via T1 */
-#define DSR_SUMMARY_PROFILE_OFFSET   0xC0u   /* Profile area start in summary plaintext */
+/* DSR summary slot payload offsets (absolute offsets within decrypted plaintext).
+ * NOTE: active_slot is a 1-BYTE field in DSR (not int32 like DS3).
+ * The first 4 decrypted bytes are an internal slot header before game data. */
+#define DSR_PLAINTEXT_SLOT_HEADER_SIZE 0x04u
+#define DSR_SUMMARY_ACTIVE_OFFSET      (DSR_PLAINTEXT_SLOT_HEADER_SIZE + 0x45u)  /* Active slot index (uint8) in summary plaintext — VERIFIED via T1 */
+#define DSR_SUMMARY_AVAILABLE_OFFSET   (DSR_PLAINTEXT_SLOT_HEADER_SIZE + 0xB0u)  /* Available slots: 10 bytes, 1 byte per slot — VERIFIED via T1 */
+#define DSR_SUMMARY_PROFILE_OFFSET     (DSR_PLAINTEXT_SLOT_HEADER_SIZE + 0xC0u)  /* Profile area start in summary plaintext */
 #define DSR_PROFILE_SIZE             0x190u  /* Size of one character profile entry */
 
 /* Test Steam IDs for cross-account selftest fixtures.

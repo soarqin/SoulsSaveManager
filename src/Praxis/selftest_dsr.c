@@ -164,8 +164,8 @@ static bool dsr_compute_file_sha256(const wchar_t *path, uint8_t out_hash[32]) {
  * MD5 covers IV || ciphertext (DSR convention, same as DS3).
  *
  * Only summary slot (index 10) carries meaningful fields:
- *   - active_slot byte at DSR_SUMMARY_ACTIVE_OFFSET (0x45)
- *   - availability[0] = 1 at DSR_SUMMARY_AVAILABLE_OFFSET (0xB0)
+ *   - active_slot byte at DSR_SUMMARY_ACTIVE_OFFSET (0x49)
+ *   - availability[0] = 1 at DSR_SUMMARY_AVAILABLE_OFFSET (0xB4)
  * All char slots have all-zero plaintext (still produce valid MD5s).
  *
  * DSR has NO Steam ID embedded in save data — the userid parameter is purely

@@ -4,11 +4,11 @@
  * @details Implements load/free/serialize/import for DS2S .sl2 save files.
  *          Key differences from DS3:
  *          (1) Dual-slot abstraction: char N = BND4 entry (N+1) [part A] + entry (N+11) [part B]
- *          (2) Steam ID is TEXT (16 lowercase hex chars at summary[0x39]), NOT binary uint64
+ *          (2) Steam ID is TEXT (16 lowercase hex chars at summary[0x3D]), NOT binary uint64
  *          (3) Availability via int32 flag at profile_base+4 (NOT DS3's bitmap)
  *          (4) 23 BND4 entries (1 summary + 10 part-A + 10 part-B + 2 extras)
  *          (5) Profile size 0x1F0 (NOT DS3's 0x22A)
- *          (6) Active slot: int32 at summary offset 0x36C
+ *          (6) Active slot: int32 at summary offset 0x370
  */
 
 #include "ds2save.h"
@@ -18,13 +18,14 @@
 #include <winternl.h>
 #include <bcrypt.h>
 
-#define DS2_AES_KEY_SIZE         16u
-#define DS2_SLOT_HEADER_SIZE     32u
-#define DS2_SLOT_COUNT           10
-#define DS2_SUMMARY_INDEX        0
-#define DS2_BND4_TOTAL_ENTRIES   23
-#define DS2_CHAR_A_BASE_INDEX    1    /* BND4 entries 1..10 = char part A */
-#define DS2_CHAR_B_BASE_INDEX    11   /* BND4 entries 11..20 = char part B */
+#define DS2_AES_KEY_SIZE          16u
+#define DS2_SLOT_HEADER_SIZE      4u    /* 4-byte internal header before game data in each decrypted slot */
+#define DS2_SLOT_FILE_HEADER_SIZE 32u   /* 16-byte MD5 + 16-byte IV */
+#define DS2_SLOT_COUNT            10
+#define DS2_SUMMARY_INDEX         0
+#define DS2_BND4_TOTAL_ENTRIES    23
+#define DS2_CHAR_A_BASE_INDEX     1     /* BND4 entries 1..10 = char part A */
+#define DS2_CHAR_B_BASE_INDEX     11    /* BND4 entries 11..20 = char part B */
 
 /* Slot on-disk sizes (empirical, T1) */
 #define DS2_SUMMARY_SLOT_FILE_SIZE   0x1AB0u
@@ -36,15 +37,19 @@
 #define DS2_CHAR_A_PLAINTEXT_SIZE    0x1B2C0u
 #define DS2_CHAR_B_PLAINTEXT_SIZE    0x7A8B0u
 
+/* Serialized character data skips the 4-byte internal plaintext headers. */
+#define DS2_CHAR_A_SERIALIZED_SIZE    (DS2_CHAR_A_PLAINTEXT_SIZE - DS2_SLOT_HEADER_SIZE)
+#define DS2_CHAR_B_SERIALIZED_SIZE    (DS2_CHAR_B_PLAINTEXT_SIZE - DS2_SLOT_HEADER_SIZE)
+
 /* Profile */
 #define DS2_PROFILE_SIZE             0x1F0u
 #define DS2_PROFILE_AVAILABLE_FLAG_OFFSET  4u  /* int32 LE at profile+4: 1=used, 0=unused */
 
 /* Summary offsets */
-#define DS2_SUMMARY_STEAMID_OFFSET   0x39u   /* 16 ASCII lowercase hex chars -- EMPIRICAL (NOT 0x35) */
+#define DS2_SUMMARY_STEAMID_OFFSET   0x3Du   /* +4 from raw offset 0x39 */
 #define DS2_STEAMID_TEXT_LENGTH      16u
-#define DS2_SUMMARY_ACTIVE_OFFSET    0x36Cu  /* int32 LE */
-#define DS2_SUMMARY_PROFILE_OFFSET   0x37Cu  /* 10 profiles x 0x1F0 */
+#define DS2_SUMMARY_ACTIVE_OFFSET    0x370u  /* +4 from raw offset 0x36C */
+#define DS2_SUMMARY_PROFILE_OFFSET   0x380u  /* +4 from raw offset 0x37C */
 
 /* DS2_PROFILE_EMBEDDED_STEAMID_OFFSET: T1 found NO embedded Steam ID in profile region.
  * Define as -1 to indicate no patching needed. */
@@ -100,19 +105,28 @@ static void write_i32_le(uint8_t *data, int32_t value) {
     CopyMemory(data, &value, sizeof(value));
 }
 
-static bool ds2_summary_steamid_is_lower_hex(const uint8_t *summary_plaintext) {
+static bool ds2_summary_steamid_is_lower_hex_at(const uint8_t *summary_plaintext, size_t offset) {
     if (!summary_plaintext) {
         return false;
     }
 
     for (size_t i = 0; i < DS2_STEAMID_TEXT_LENGTH; i++) {
-        uint8_t ch = summary_plaintext[DS2_SUMMARY_STEAMID_OFFSET + i];
+        uint8_t ch = summary_plaintext[offset + i];
         if ((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')) {
             continue;
         }
         return false;
     }
     return true;
+}
+
+static bool ds2_summary_steamid_is_lower_hex(const uint8_t *summary_plaintext) {
+    if (ds2_summary_steamid_is_lower_hex_at(summary_plaintext, DS2_SUMMARY_STEAMID_OFFSET)) {
+        return true;
+    }
+
+    /* Accept legacy placement for load validation only; writes use corrected offsets. */
+    return ds2_summary_steamid_is_lower_hex_at(summary_plaintext, DS2_SUMMARY_STEAMID_OFFSET - DS2_SLOT_HEADER_SIZE);
 }
 
 static bool ds2_profile_is_available(const uint8_t *profile_base) {
@@ -245,7 +259,7 @@ static bool ds2_read_decrypt_slot(HANDLE file, BCRYPT_KEY_HANDLE key, uint32_t s
     if (!ds2_read_exact_at(file, slot_offset + 16, iv, sizeof(iv))) {
         return false;
     }
-    if (!ds2_read_exact_at(file, slot_offset + DS2_SLOT_HEADER_SIZE, ciphertext, ciphertext_size)) {
+    if (!ds2_read_exact_at(file, slot_offset + DS2_SLOT_FILE_HEADER_SIZE, ciphertext, ciphertext_size)) {
         return false;
     }
 
@@ -264,7 +278,7 @@ static bool ds2_write_encrypted_slot(HANDLE file,
                                      ULONG plaintext_size,
                                      uint8_t *ciphertext,
                                      ULONG ciphertext_capacity) {
-    ULONG ciphertext_size = slot_file_size - DS2_SLOT_HEADER_SIZE;
+    ULONG ciphertext_size = slot_file_size - DS2_SLOT_FILE_HEADER_SIZE;
     if (!file || !key || !plaintext || !ciphertext || plaintext_size != ciphertext_size || ciphertext_capacity < ciphertext_size) {
         return false;
     }
@@ -283,7 +297,7 @@ static bool ds2_write_encrypted_slot(HANDLE file,
     ds2_md5_iv_ct(existing_iv, ciphertext, ciphertext_len, md5);
     if (!ds2_write_at(file, slot_offset, md5, sizeof(md5))
         || !ds2_write_at(file, slot_offset + 16, existing_iv, sizeof(existing_iv))
-        || !ds2_write_at(file, slot_offset + DS2_SLOT_HEADER_SIZE, ciphertext, ciphertext_len)) {
+        || !ds2_write_at(file, slot_offset + DS2_SLOT_FILE_HEADER_SIZE, ciphertext, ciphertext_len)) {
         return false;
     }
 
@@ -356,7 +370,7 @@ bool ds2_save_data_load(const wchar_t *path, ds2_save_data_t **out_save) {
         return false;
     }
 
-    ULONG max_ciphertext_size = DS2_CHAR_B_SLOT_FILE_SIZE - DS2_SLOT_HEADER_SIZE;
+    ULONG max_ciphertext_size = DS2_CHAR_B_SLOT_FILE_SIZE - DS2_SLOT_FILE_HEADER_SIZE;
     uint8_t *ciphertext = LocalAlloc(LMEM_FIXED, max_ciphertext_size);
     if (!ciphertext) {
         ds2_aes_close(alg, key, key_obj);
@@ -365,7 +379,7 @@ bool ds2_save_data_load(const wchar_t *path, ds2_save_data_t **out_save) {
         return false;
     }
 
-    if (!ds2_read_decrypt_slot(file, key, save->slot_offset[DS2_SUMMARY_INDEX], ciphertext, DS2_SUMMARY_SLOT_FILE_SIZE - DS2_SLOT_HEADER_SIZE, save->summary_plaintext, DS2_SUMMARY_PLAINTEXT_SIZE)) {
+    if (!ds2_read_decrypt_slot(file, key, save->slot_offset[DS2_SUMMARY_INDEX], ciphertext, DS2_SUMMARY_SLOT_FILE_SIZE - DS2_SLOT_FILE_HEADER_SIZE, save->summary_plaintext, DS2_SUMMARY_PLAINTEXT_SIZE)) {
         LocalFree(ciphertext);
         ds2_aes_close(alg, key, key_obj);
         LocalFree(save);
@@ -385,14 +399,14 @@ bool ds2_save_data_load(const wchar_t *path, ds2_save_data_t **out_save) {
         bool available = ds2_profile_is_available(profile_base);
         save->chars[i].available = available;
         if (available) {
-            if (!ds2_read_decrypt_slot(file, key, save->slot_offset[DS2_CHAR_A_BASE_INDEX + i], ciphertext, DS2_CHAR_A_SLOT_FILE_SIZE - DS2_SLOT_HEADER_SIZE, save->chars[i].part_a, DS2_CHAR_A_PLAINTEXT_SIZE)) {
+            if (!ds2_read_decrypt_slot(file, key, save->slot_offset[DS2_CHAR_A_BASE_INDEX + i], ciphertext, DS2_CHAR_A_SLOT_FILE_SIZE - DS2_SLOT_FILE_HEADER_SIZE, save->chars[i].part_a, DS2_CHAR_A_PLAINTEXT_SIZE)) {
                 LocalFree(ciphertext);
                 ds2_aes_close(alg, key, key_obj);
                 LocalFree(save);
                 CloseHandle(file);
                 return false;
             }
-            if (!ds2_read_decrypt_slot(file, key, save->slot_offset[DS2_CHAR_B_BASE_INDEX + i], ciphertext, DS2_CHAR_B_SLOT_FILE_SIZE - DS2_SLOT_HEADER_SIZE, save->chars[i].part_b, DS2_CHAR_B_PLAINTEXT_SIZE)) {
+            if (!ds2_read_decrypt_slot(file, key, save->slot_offset[DS2_CHAR_B_BASE_INDEX + i], ciphertext, DS2_CHAR_B_SLOT_FILE_SIZE - DS2_SLOT_FILE_HEADER_SIZE, save->chars[i].part_b, DS2_CHAR_B_PLAINTEXT_SIZE)) {
                 LocalFree(ciphertext);
                 ds2_aes_close(alg, key, key_obj);
                 LocalFree(save);
@@ -447,9 +461,9 @@ bool ds2_char_data_serialize(const ds2_char_data_t *char_data, uint8_t *out_buf,
         return false;
     }
 
-    CopyMemory(out_buf, char_data->part_a, DS2_CHAR_A_PLAINTEXT_SIZE);
-    CopyMemory(out_buf + DS2_CHAR_A_PLAINTEXT_SIZE, char_data->part_b, DS2_CHAR_B_PLAINTEXT_SIZE);
-    CopyMemory(out_buf + DS2_CHAR_A_PLAINTEXT_SIZE + DS2_CHAR_B_PLAINTEXT_SIZE, char_data->profile, DS2_PROFILE_SIZE);
+    CopyMemory(out_buf, char_data->part_a + DS2_SLOT_HEADER_SIZE, DS2_CHAR_A_SERIALIZED_SIZE);
+    CopyMemory(out_buf + DS2_CHAR_A_SERIALIZED_SIZE, char_data->part_b + DS2_SLOT_HEADER_SIZE, DS2_CHAR_B_SERIALIZED_SIZE);
+    CopyMemory(out_buf + DS2_CHAR_A_SERIALIZED_SIZE + DS2_CHAR_B_SERIALIZED_SIZE, char_data->profile, DS2_PROFILE_SIZE);
     return true;
 }
 
@@ -459,12 +473,12 @@ bool ds2_char_data_import_raw(ds2_save_data_t *save, int slot, const uint8_t *ra
     }
 
     const uint8_t *raw_part_a = raw_data;
-    const uint8_t *raw_part_b = raw_data + DS2_CHAR_A_PLAINTEXT_SIZE;
-    const uint8_t *raw_profile = raw_data + DS2_CHAR_A_PLAINTEXT_SIZE + DS2_CHAR_B_PLAINTEXT_SIZE;
+    const uint8_t *raw_part_b = raw_data + DS2_CHAR_A_SERIALIZED_SIZE;
+    const uint8_t *raw_profile = raw_data + DS2_CHAR_A_SERIALIZED_SIZE + DS2_CHAR_B_SERIALIZED_SIZE;
     uint8_t *summary_profile = save->summary_plaintext + DS2_SUMMARY_PROFILE_OFFSET + slot * DS2_PROFILE_SIZE;
 
-    CopyMemory(save->chars[slot].part_a, raw_part_a, DS2_CHAR_A_PLAINTEXT_SIZE);
-    CopyMemory(save->chars[slot].part_b, raw_part_b, DS2_CHAR_B_PLAINTEXT_SIZE);
+    CopyMemory(save->chars[slot].part_a + DS2_SLOT_HEADER_SIZE, raw_part_a, DS2_CHAR_A_SERIALIZED_SIZE);
+    CopyMemory(save->chars[slot].part_b + DS2_SLOT_HEADER_SIZE, raw_part_b, DS2_CHAR_B_SERIALIZED_SIZE);
     CopyMemory(save->chars[slot].profile, raw_profile, DS2_PROFILE_SIZE);
     CopyMemory(summary_profile, raw_profile, DS2_PROFILE_SIZE);
     write_i32_le(summary_profile + DS2_PROFILE_AVAILABLE_FLAG_OFFSET, 1);
@@ -490,7 +504,7 @@ bool ds2_char_data_import_raw(ds2_save_data_t *save, int slot, const uint8_t *ra
         return false;
     }
 
-    ULONG ciphertext_capacity = DS2_CHAR_B_SLOT_FILE_SIZE - DS2_SLOT_HEADER_SIZE;
+    ULONG ciphertext_capacity = DS2_CHAR_B_SLOT_FILE_SIZE - DS2_SLOT_FILE_HEADER_SIZE;
     uint8_t *ciphertext = LocalAlloc(LMEM_FIXED, ciphertext_capacity);
     if (!ciphertext) {
         CloseHandle(file);
