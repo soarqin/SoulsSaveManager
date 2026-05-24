@@ -4,11 +4,11 @@
  * @details Implements load/free/serialize/import for DS2S .sl2 save files.
  *          Key differences from DS3:
  *          (1) Dual-slot abstraction: char N = BND4 entry (N+1) [part A] + entry (N+11) [part B]
- *          (2) Steam ID is TEXT (16 lowercase hex chars at summary[0x3D]), NOT binary uint64
+ *          (2) Steam ID is TEXT (16 lowercase hex chars at summary[0x39]), NOT binary uint64
  *          (3) Availability via int32 flag at profile_base+4 (NOT DS3's bitmap)
  *          (4) 23 BND4 entries (1 summary + 10 part-A + 10 part-B + 2 extras)
  *          (5) Profile size 0x1F0 (NOT DS3's 0x22A)
- *          (6) Active slot: int32 at summary offset 0x370
+ *          (6) Active slot: int32 at summary offset 0x36C
  */
 
 #include "ds2save.h"
@@ -19,7 +19,6 @@
 #include <bcrypt.h>
 
 #define DS2_AES_KEY_SIZE          16u
-#define DS2_SLOT_HEADER_SIZE      4u    /* 4-byte internal header before game data in each decrypted slot */
 #define DS2_SLOT_FILE_HEADER_SIZE 32u   /* 16-byte MD5 + 16-byte IV */
 #define DS2_SLOT_COUNT            10
 #define DS2_SUMMARY_INDEX         0
@@ -37,19 +36,18 @@
 #define DS2_CHAR_A_PLAINTEXT_SIZE    0x1B2C0u
 #define DS2_CHAR_B_PLAINTEXT_SIZE    0x7A8B0u
 
-/* Serialized character data skips the 4-byte internal plaintext headers. */
-#define DS2_CHAR_A_SERIALIZED_SIZE    (DS2_CHAR_A_PLAINTEXT_SIZE - DS2_SLOT_HEADER_SIZE)
-#define DS2_CHAR_B_SERIALIZED_SIZE    (DS2_CHAR_B_PLAINTEXT_SIZE - DS2_SLOT_HEADER_SIZE)
+#define DS2_CHAR_A_SERIALIZED_SIZE    DS2_CHAR_A_PLAINTEXT_SIZE
+#define DS2_CHAR_B_SERIALIZED_SIZE    DS2_CHAR_B_PLAINTEXT_SIZE
 
 /* Profile */
 #define DS2_PROFILE_SIZE             0x1F0u
-#define DS2_PROFILE_AVAILABLE_FLAG_OFFSET  4u  /* int32 LE at profile+4: 1=used, 0=unused */
+#define DS2_PROFILE_AVAILABLE_FLAG_OFFSET  0u  /* int32 LE at profile+0: 1=used, 0=unused */
 
 /* Summary offsets */
-#define DS2_SUMMARY_STEAMID_OFFSET   0x3Du   /* +4 from raw offset 0x39 */
+#define DS2_SUMMARY_STEAMID_OFFSET   0x39u
 #define DS2_STEAMID_TEXT_LENGTH      16u
-#define DS2_SUMMARY_ACTIVE_OFFSET    0x370u  /* +4 from raw offset 0x36C */
-#define DS2_SUMMARY_PROFILE_OFFSET   0x380u  /* +4 from raw offset 0x37C */
+#define DS2_SUMMARY_ACTIVE_OFFSET    0x36Cu
+#define DS2_SUMMARY_PROFILE_OFFSET   0x37Cu
 
 /* DS2_PROFILE_EMBEDDED_STEAMID_OFFSET: T1 found NO embedded Steam ID in profile region.
  * Define as -1 to indicate no patching needed. */
@@ -121,12 +119,7 @@ static bool ds2_summary_steamid_is_lower_hex_at(const uint8_t *summary_plaintext
 }
 
 static bool ds2_summary_steamid_is_lower_hex(const uint8_t *summary_plaintext) {
-    if (ds2_summary_steamid_is_lower_hex_at(summary_plaintext, DS2_SUMMARY_STEAMID_OFFSET)) {
-        return true;
-    }
-
-    /* Accept legacy placement for load validation only; writes use corrected offsets. */
-    return ds2_summary_steamid_is_lower_hex_at(summary_plaintext, DS2_SUMMARY_STEAMID_OFFSET - DS2_SLOT_HEADER_SIZE);
+    return ds2_summary_steamid_is_lower_hex_at(summary_plaintext, DS2_SUMMARY_STEAMID_OFFSET);
 }
 
 static bool ds2_profile_is_available(const uint8_t *profile_base) {
@@ -461,8 +454,8 @@ bool ds2_char_data_serialize(const ds2_char_data_t *char_data, uint8_t *out_buf,
         return false;
     }
 
-    CopyMemory(out_buf, char_data->part_a + DS2_SLOT_HEADER_SIZE, DS2_CHAR_A_SERIALIZED_SIZE);
-    CopyMemory(out_buf + DS2_CHAR_A_SERIALIZED_SIZE, char_data->part_b + DS2_SLOT_HEADER_SIZE, DS2_CHAR_B_SERIALIZED_SIZE);
+    CopyMemory(out_buf, char_data->part_a, DS2_CHAR_A_SERIALIZED_SIZE);
+    CopyMemory(out_buf + DS2_CHAR_A_SERIALIZED_SIZE, char_data->part_b, DS2_CHAR_B_SERIALIZED_SIZE);
     CopyMemory(out_buf + DS2_CHAR_A_SERIALIZED_SIZE + DS2_CHAR_B_SERIALIZED_SIZE, char_data->profile, DS2_PROFILE_SIZE);
     return true;
 }
@@ -477,8 +470,8 @@ bool ds2_char_data_import_raw(ds2_save_data_t *save, int slot, const uint8_t *ra
     const uint8_t *raw_profile = raw_data + DS2_CHAR_A_SERIALIZED_SIZE + DS2_CHAR_B_SERIALIZED_SIZE;
     uint8_t *summary_profile = save->summary_plaintext + DS2_SUMMARY_PROFILE_OFFSET + slot * DS2_PROFILE_SIZE;
 
-    CopyMemory(save->chars[slot].part_a + DS2_SLOT_HEADER_SIZE, raw_part_a, DS2_CHAR_A_SERIALIZED_SIZE);
-    CopyMemory(save->chars[slot].part_b + DS2_SLOT_HEADER_SIZE, raw_part_b, DS2_CHAR_B_SERIALIZED_SIZE);
+    CopyMemory(save->chars[slot].part_a, raw_part_a, DS2_CHAR_A_SERIALIZED_SIZE);
+    CopyMemory(save->chars[slot].part_b, raw_part_b, DS2_CHAR_B_SERIALIZED_SIZE);
     CopyMemory(save->chars[slot].profile, raw_profile, DS2_PROFILE_SIZE);
     CopyMemory(summary_profile, raw_profile, DS2_PROFILE_SIZE);
     write_i32_le(summary_profile + DS2_PROFILE_AVAILABLE_FLAG_OFFSET, 1);

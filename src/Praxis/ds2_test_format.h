@@ -69,7 +69,7 @@ static const uint8_t DS2_AES_KEY_BYTES[16] = {
 #define DS2_SUMMARY_ACTIVE_OFFSET       0x36Cu  /* int32 LE — VERIFIED via T1 */
 #define DS2_SUMMARY_PROFILE_OFFSET      0x37Cu  /* Profile area start; stride DS2_PROFILE_SIZE, 10 profiles */
 #define DS2_PROFILE_SIZE                0x1F0u  /* Size of one character profile entry */
-#define DS2_PROFILE_AVAILABLE_FLAG_OFFSET 4u    /* int32 LE at profile+4: 1=used, 0=unused — EMPIRICAL T1 */
+#define DS2_PROFILE_AVAILABLE_FLAG_OFFSET 0u    /* int32 LE at profile+0: 1=used, 0=unused — EMPIRICAL T1 */
 
 /* Test Steam IDs for cross-account selftest (TEXT format, 16 lowercase hex chars).
  * NEVER use %016llX (uppercase) — DS2S format string is %016llx (lowercase). */
