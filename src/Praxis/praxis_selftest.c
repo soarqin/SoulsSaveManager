@@ -1252,6 +1252,103 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
                     }
                 }
             }
+        } else if (wcscmp(sub, L"profile-legacy-save-dir") == 0) {
+            if (argc < 4) {
+                st_printf(L"usage: --selftest profile-legacy-save-dir <ini>\n");
+                exit_code = 2;
+            } else {
+                const char *ini_text =
+                    "[Settings]\r\n"
+                    "ActiveGameProfileId=1\r\n"
+                    "ActiveBackupProfileId=2\r\n"
+                    "\r\n"
+                    "[GameProfile:1]\r\n"
+                    "Name=ER\r\n"
+                    "GameId=1\r\n"
+                    "OriginalSaveDir=C:\\Games\\ER\\76561198000000000\r\n"
+                    "TreeRoot=C:\\Backups\\ER\r\n"
+                    "\r\n"
+                    "[GameProfile:2]\r\n"
+                    "Name=DS3\r\n"
+                    "GameId=2\r\n"
+                    "OriginalSaveDir=C:\\Games\\DS3\\0123456789ABCDEF\r\n"
+                    "TreeRoot=C:\\Backups\\DS3\r\n"
+                    "\r\n"
+                    "[BackupProfile:1]\r\n"
+                    "ParentGameId=2\r\n"
+                    "Name=Other\r\n"
+                    "CompressionLevel=medium\r\n"
+                    "\r\n"
+                    "[BackupProfile:2]\r\n"
+                    "ParentGameId=1\r\n"
+                    "Name=Main\r\n"
+                    "CompressionLevel=medium\r\n";
+                HANDLE file = CreateFileW(argv[3], GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+                DWORD written = 0;
+                if (file == INVALID_HANDLE_VALUE) {
+                    st_printf(L"profile-legacy-save-dir: FAIL (create)\n");
+                    exit_code = 1;
+                } else if (!WriteFile(file, ini_text, (DWORD)strlen(ini_text), &written, NULL) || written != strlen(ini_text)) {
+                    CloseHandle(file);
+                    st_printf(L"profile-legacy-save-dir: FAIL (write)\n");
+                    exit_code = 1;
+                } else {
+                    profile_store_t store;
+                    CloseHandle(file);
+                    profile_store_init(&store);
+                    if (!profile_store_io_load(&store, argv[3])) {
+                        st_printf(L"profile-legacy-save-dir: FAIL (load)\n");
+                        exit_code = 1;
+                    } else if (store.game_count == 2 && store.backup_count == 2 &&
+                               lstrcmpW(store.games[0].original_save_dir, L"C:\\Games\\ER\\76561198000000000\\ER0000.sl2") == 0 &&
+                               lstrcmpW(store.games[1].original_save_dir, L"C:\\Games\\DS3\\0123456789ABCDEF\\DS30000.sl2") == 0 &&
+                               store.active_game_id == 1 && store.active_backup_id == 2) {
+                        st_printf(L"profile-legacy-save-dir: ok\n");
+                        exit_code = 0;
+                    } else {
+                        st_printf(L"profile-legacy-save-dir: FAIL (compare)\n");
+                        exit_code = 1;
+                    }
+                }
+            }
+        } else if (wcscmp(sub, L"profile-active-game-backups") == 0) {
+            profile_store_t store;
+            const backup_profile_t *items[4];
+            size_t count;
+
+            profile_store_init(&store);
+            store.games[0].id = 1;
+            lstrcpyW(store.games[0].name, L"ER");
+            store.games[0].game_id = GAME_ID_ELDEN_RING;
+            lstrcpyW(store.games[0].tree_root, L"C:\\Backups\\ER");
+            store.games[1].id = 2;
+            lstrcpyW(store.games[1].name, L"DS3");
+            store.games[1].game_id = GAME_ID_DARK_SOULS_3;
+            lstrcpyW(store.games[1].tree_root, L"C:\\Backups\\DS3");
+            store.game_count = 2;
+            store.backups[0].id = 1;
+            store.backups[0].parent_game_id = 1;
+            lstrcpyW(store.backups[0].name, L"ER Main");
+            store.backups[1].id = 2;
+            store.backups[1].parent_game_id = 2;
+            lstrcpyW(store.backups[1].name, L"DS3 Main");
+            store.backup_count = 2;
+            store.active_game_id = 1;
+            store.active_backup_id = 1;
+
+            if (!profile_store_set_active_game(&store, 2)) {
+                st_printf(L"profile-active-game-backups: FAIL (set game)\n");
+                exit_code = 1;
+            } else {
+                count = profile_store_list_backups_for_game(&store, store.active_game_id, items, 4);
+                if (count == 1 && store.active_backup_id == 2 && items[0]->id == 2) {
+                    st_printf(L"profile-active-game-backups: ok\n");
+                    exit_code = 0;
+                } else {
+                    st_printf(L"profile-active-game-backups: FAIL (compare)\n");
+                    exit_code = 1;
+                }
+            }
         } else if (wcscmp(sub, L"profile-load") == 0) {
             if (argc < 4) {
                 exit_code = 2;
