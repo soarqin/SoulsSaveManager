@@ -87,9 +87,8 @@ void toolbar_layout_bottom(toolbar_t *t, int parent_width, int y_top);
 
 /**
  * @brief Repopulate the backup profile combobox from the profile store.
- * @details Clears existing items then for each backup profile in the store
- *          appends a label of the form "<game_name> / <backup_name>" with
- *          the backup_id stored as item data via CB_SETITEMDATA.
+ * @details Clears existing items then appends backup profiles for the active
+ *          game with the backup_id stored as item data via CB_SETITEMDATA.
  * @param t     Toolbar handle.
  * @param store Profile store to read from (may be NULL — clears combobox).
  */

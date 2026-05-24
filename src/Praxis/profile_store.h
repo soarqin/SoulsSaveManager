@@ -27,14 +27,14 @@ typedef enum compression_level_e {
 
 /**
  * @brief Game profile: represents a configured game instance.
- * @details Stores game-specific settings including save directory and backup root.
+ * @details Stores game-specific settings including save file and backup root.
  *          id >= 1 is valid; id == 0 is invalid/uninitialized.
  */
 typedef struct game_profile_s {
     int id;                                 /* Sequential ID; >= 1 is valid, 0 = invalid */
     wchar_t name[64];                       /* User-visible name; duplicates allowed */
     game_id_t game_id;                      /* Game type (e.g., GAME_ID_ELDEN_RING) */
-    wchar_t original_save_dir[MAX_PATH];    /* Game save directory; empty = auto-discover */
+    wchar_t original_save_dir[MAX_PATH];    /* Game save file; empty = auto-discover */
     wchar_t tree_root[MAX_PATH];            /* Base directory for backup profiles */
 } game_profile_t;
 

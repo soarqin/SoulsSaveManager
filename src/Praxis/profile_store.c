@@ -286,7 +286,18 @@ bool profile_store_set_active_game(profile_store_t *store, int id) {
     }
     for (size_t i = 0; i < store->game_count; i++) {
         if (store->games[i].id == id) {
+            const backup_profile_t *active_backup;
             store->active_game_id = id;
+            active_backup = profile_store_get_active_backup(store);
+            if (active_backup == NULL || active_backup->parent_game_id != id) {
+                store->active_backup_id = 0;
+                for (size_t j = 0; j < store->backup_count; j++) {
+                    if (store->backups[j].parent_game_id == id) {
+                        store->active_backup_id = store->backups[j].id;
+                        break;
+                    }
+                }
+            }
             return true;
         }
     }
@@ -378,4 +389,3 @@ bool profile_store_find_unique_game_name(const profile_store_t *store,
 
     return false;
 }
-

@@ -459,22 +459,13 @@ void toolbar_populate_profiles(toolbar_t *t, const profile_store_t *store) {
 
     for (i = 0; i < store->backup_count; i++) {
         const backup_profile_t *bp = &store->backups[i];
-        const wchar_t *game_name = L"?";
-        wchar_t label[160];
-        size_t g;
         LRESULT idx;
 
-        /* Resolve parent game name for the "<game> / <backup>" label. */
-        for (g = 0; g < store->game_count; g++) {
-            if (store->games[g].id == bp->parent_game_id) {
-                game_name = store->games[g].name;
-                break;
-            }
+        if (store->active_game_id != 0 && bp->parent_game_id != store->active_game_id) {
+            continue;
         }
 
-        _snwprintf_s(label, 160, _TRUNCATE, L"%ls / %ls", game_name, bp->name);
-
-        idx = SendMessageW(t->combo, CB_ADDSTRING, 0, (LPARAM)label);
+        idx = SendMessageW(t->combo, CB_ADDSTRING, 0, (LPARAM)bp->name);
         if (idx != CB_ERR && idx != CB_ERRSPACE) {
             SendMessageW(t->combo, CB_SETITEMDATA, (WPARAM)idx, (LPARAM)bp->id);
         }

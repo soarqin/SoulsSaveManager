@@ -11,12 +11,14 @@
 #include "profile_store_io.h"
 #include "config.h"
 #include "../common/config_core.h"
+#include "backend_registry.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
 #include <windows.h>
+#include <shlwapi.h>
 
 /* Maximum INI file size accepted by profile_store_io_load (256 KiB). */
 #define PROFILE_STORE_MAX_BYTES (256u * 1024u)
@@ -32,7 +34,26 @@ typedef struct parse_ctx_s {
     int current_section_id;     /* The N parsed from [GameProfile:N] or [BackupProfile:N] */
     game_profile_t   cur_game;  /* Accumulator for the current GameProfile section */
     backup_profile_t cur_backup; /* Accumulator for the current BackupProfile section */
+    bool cur_game_uses_legacy_save_dir;
 } parse_ctx_t;
+
+static void normalize_loaded_game_profile(game_profile_t *gp, bool legacy_save_dir) {
+    const game_backend_t *backend;
+    const wchar_t *filename;
+
+    if (gp == NULL || !legacy_save_dir || gp->original_save_dir[0] == L'\0') {
+        return;
+    }
+
+    backend = backend_registry_get_by_id(gp->game_id);
+    filename = (backend && backend->save_filename && backend->save_filename[0])
+        ? backend->save_filename : NULL;
+    if (filename == NULL) {
+        return;
+    }
+
+    PathAppendW(gp->original_save_dir, filename);
+}
 
 /**
  * @brief Commit the pending profile into the store, then identify the new section.
@@ -43,6 +64,7 @@ static void load_section_cb(const char *section, void *user) {
     /* Commit the previous section's accumulated data before switching. */
     if (ctx->current_section_type == 2 && ctx->current_section_id > 0) {
         if (ctx->store->game_count < MAX_GAME_PROFILES) {
+            normalize_loaded_game_profile(&ctx->cur_game, ctx->cur_game_uses_legacy_save_dir);
             ctx->cur_game.id = ctx->current_section_id;
             ctx->store->games[ctx->store->game_count++] = ctx->cur_game;
         }
@@ -55,6 +77,7 @@ static void load_section_cb(const char *section, void *user) {
 
     ZeroMemory(&ctx->cur_game, sizeof(ctx->cur_game));
     ZeroMemory(&ctx->cur_backup, sizeof(ctx->cur_backup));
+    ctx->cur_game_uses_legacy_save_dir = false;
     ctx->cur_backup.compression_level = COMP_LEVEL_MEDIUM; /* default when key is absent */
     ctx->current_section_id = 0;
 
@@ -92,8 +115,12 @@ static void load_kv_cb(const char *key, const char *value, void *user) {
             config_core_store_wide_value(ctx->cur_game.name, 64, value);
         } else if (strcmp(key, "GameId") == 0) {
             ctx->cur_game.game_id = (game_id_t)atoi(value);
+        } else if (strcmp(key, "OriginalSaveFile") == 0) {
+            config_core_store_wide_value(ctx->cur_game.original_save_dir, MAX_PATH, value);
+            ctx->cur_game_uses_legacy_save_dir = false;
         } else if (strcmp(key, "OriginalSaveDir") == 0) {
             config_core_store_wide_value(ctx->cur_game.original_save_dir, MAX_PATH, value);
+            ctx->cur_game_uses_legacy_save_dir = true;
         } else if (strcmp(key, "TreeRoot") == 0) {
             config_core_store_wide_value(ctx->cur_game.tree_root, MAX_PATH, value);
         }
@@ -203,17 +230,24 @@ bool profile_store_io_load(profile_store_t *out_store, const wchar_t *ini_path) 
         }
     }
 
-    /* Active backup ID fallback: if the active backup is gone, pick the first available. */
+    /* Active backup ID fallback: if the active backup is gone or belongs to another game, pick the first active-game backup. */
     if (out_store->active_backup_id != 0) {
         bool found = false;
         for (size_t j = 0; j < out_store->backup_count; j++) {
-            if (out_store->backups[j].id == out_store->active_backup_id) {
+            if (out_store->backups[j].id == out_store->active_backup_id &&
+                (out_store->active_game_id == 0 || out_store->backups[j].parent_game_id == out_store->active_game_id)) {
                 found = true;
                 break;
             }
         }
         if (!found) {
-            out_store->active_backup_id = out_store->backup_count > 0 ? out_store->backups[0].id : 0;
+            out_store->active_backup_id = 0;
+            for (size_t j = 0; j < out_store->backup_count; j++) {
+                if (out_store->active_game_id == 0 || out_store->backups[j].parent_game_id == out_store->active_game_id) {
+                    out_store->active_backup_id = out_store->backups[j].id;
+                    break;
+                }
+            }
         }
     }
 
@@ -341,7 +375,7 @@ bool profile_store_io_save(const profile_store_t *store, const wchar_t *ini_path
         config_core_buf_append(&buf, "[GameProfile:%d]\r\n", gp->id);
         config_core_buf_append(&buf, "Name=%s\r\n", name_utf8);
         config_core_buf_append(&buf, "GameId=%d\r\n", (int)gp->game_id);
-        config_core_buf_append(&buf, "OriginalSaveDir=%s\r\n", orig_dir_utf8);
+        config_core_buf_append(&buf, "OriginalSaveFile=%s\r\n", orig_dir_utf8);
         config_core_buf_append(&buf, "TreeRoot=%s\r\n", game_tree_utf8);
         config_core_buf_append(&buf, "\r\n");
     }
