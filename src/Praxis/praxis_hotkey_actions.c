@@ -46,8 +46,8 @@ static const game_backend_t *get_active_backend_for(const profile_store_t *store
     return backend_registry_get_default();
 }
 
-/* Resolve the active save file path. Uses the game profile's original_save_dir
- * override when set; otherwise asks the backend to discover it. */
+/* Resolve the active save file path. Uses the game profile's save-file override
+ * when set; otherwise asks the backend to discover it. */
 static bool resolve_save_path_for(const profile_store_t *store,
                                   wchar_t *out, size_t out_chars) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
@@ -67,10 +67,8 @@ static bool resolve_save_path_for(const profile_store_t *store,
     }
 
     if (gp->original_save_dir[0] != L'\0') {
-        const wchar_t *fname = (backend->save_filename && backend->save_filename[0])
-            ? backend->save_filename : L"ER0000.sl2";
         lstrcpynW(out, gp->original_save_dir, (int)out_chars);
-        return PathAppendW(out, fname) == TRUE;
+        return true;
     }
 
     return backend->resolve_save_path(out, out_chars);

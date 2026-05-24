@@ -2,7 +2,7 @@
  * @file edit_game_profile.c
  * @brief Implementation of the Edit Game Profile modal dialog.
  * @details Captures Name, Game, original_save_dir, and tree_root for a game_profile_t.
- *          Browse buttons use file_dialog_open_folder for folder selection. For new
+ *          Browse buttons use file dialogs for selection. For new
  *          profiles, the Name field is auto-filled with a unique name based on the
  *          selected backend's display_name, and the save_dir Browse picker uses the
  *          backend's auto-detected default directory as the initial folder when the
@@ -23,6 +23,7 @@
 #include <stdbool.h>
 #include <wchar.h>
 #include <windows.h>
+#include <shobjidl.h>
 
 /* Dialog state stored in DWLP_USER. */
 typedef struct egp_state_s {
@@ -67,27 +68,45 @@ static void egp_populate_games(HWND combo, game_id_t selected) {
     }
 }
 
-/* Open a folder picker and write the result into the named edit control.
- * For the save_dir field, when the field is empty, the selected backend's
- * auto-detected default save directory (if any) is used as the picker's
- * initial folder. The auto-detected path is consumed in-place only and is
- * NOT persisted to any "last opened directory" cache. */
+/* Open a save-file picker for the selected backend and write the result into
+ * the save path edit control. When the field is empty, the selected backend's
+ * auto-detected default save directory (if any) is used as the picker's initial
+ * folder. The auto-detected path is consumed in-place only and is NOT persisted
+ * to any "last opened directory" cache. */
+static void egp_browse_save_file(HWND hwnd) {
+    wchar_t current[MAX_PATH];
+    wchar_t auto_dir[MAX_PATH];
+    COMDLG_FILTERSPEC filters[2];
+    const game_backend_t *backend = egp_get_selected_backend(hwnd);
+    const wchar_t *save_filename = (backend && backend->save_filename && backend->save_filename[0])
+        ? backend->save_filename : L"*.*";
+
+    GetDlgItemTextW(hwnd, IDC_EGP_SAVE_DIR, current, MAX_PATH);
+    auto_dir[0] = L'\0';
+    const wchar_t *initial = current[0] ? current : NULL;
+    if (initial == NULL && backend && backend->get_default_save_dir) {
+        if (backend->get_default_save_dir(auto_dir, MAX_PATH)) {
+            initial = auto_dir;
+        }
+    }
+
+    filters[0].pszName = save_filename;
+    filters[0].pszSpec = save_filename;
+    filters[1].pszName = L"All files";
+    filters[1].pszSpec = L"*.*";
+
+    wchar_t *picked = file_dialog_open_at(hwnd, NULL, initial, filters, 2);
+    if (picked) {
+        SetDlgItemTextW(hwnd, IDC_EGP_SAVE_DIR, picked);
+        CoTaskMemFree(picked);
+    }
+}
+
 static void egp_browse_into(HWND hwnd, int edit_id) {
     wchar_t current[MAX_PATH];
     GetDlgItemTextW(hwnd, edit_id, current, MAX_PATH);
 
-    wchar_t auto_dir[MAX_PATH];
-    auto_dir[0] = L'\0';
     const wchar_t *initial = current[0] ? current : NULL;
-    if (initial == NULL && edit_id == IDC_EGP_SAVE_DIR) {
-        const game_backend_t *backend = egp_get_selected_backend(hwnd);
-        if (backend && backend->get_default_save_dir) {
-            if (backend->get_default_save_dir(auto_dir, MAX_PATH)) {
-                initial = auto_dir;
-            }
-        }
-    }
-
     wchar_t *picked = file_dialog_open_folder(hwnd, initial);
     if (picked) {
         SetDlgItemTextW(hwnd, edit_id, picked);
@@ -261,12 +280,13 @@ static INT_PTR CALLBACK egp_dlg_proc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
                         lstrcpynW(state->last_auto_name, new_name, 64);
                     }
                 }
+                SetDlgItemTextW(hwnd, IDC_EGP_SAVE_DIR, L"");
             }
             return TRUE;
         }
         switch (LOWORD(wp)) {
         case IDC_EGP_BROWSE_SAVE:
-            egp_browse_into(hwnd, IDC_EGP_SAVE_DIR);
+            egp_browse_save_file(hwnd);
             return TRUE;
         case IDC_EGP_BROWSE_TREE:
             egp_browse_into(hwnd, IDC_EGP_TREE_ROOT);
