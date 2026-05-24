@@ -48,6 +48,9 @@ add_project(praxis WIN32
     dialogs/hotkey_settings.h
     backends/er_backend.c
     backends/ds3_backend.c
+    backends/dsr_backend.c
+    backends/ds2_backend.c
+    backends/sekiro_backend.c
     resource.h
     app.rc
     VERSION 1.0.0
@@ -105,6 +108,9 @@ add_project(praxis_selftest EXECUTABLE
     praxis_hotkey_actions.c
     praxis_main_menu.c
     praxis_selftest.c
+    selftest_dsr.c selftest_dsr.h
+    selftest_ds2.c selftest_ds2.h
+    selftest_sekiro.c selftest_sekiro.h
     praxis_toast.c
     praxis_window_common.c
     toolbar.c
@@ -116,6 +122,9 @@ add_project(praxis_selftest EXECUTABLE
     dialogs/hotkey_settings.c
     backends/er_backend.c
     backends/ds3_backend.c
+    backends/dsr_backend.c
+    backends/ds2_backend.c
+    backends/sekiro_backend.c
     resource.h
     app.rc
     FOLDER "app"
