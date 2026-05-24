@@ -22,6 +22,9 @@
 #include "profile_store_io.h"
 #include "bnd4_test_format.h"
 #include "ds3_test_format.h"
+#include "selftest_dsr.h"
+#include "selftest_ds2.h"
+#include "selftest_sekiro.h"
 
 #include "../common/ds3save.h"
 #include "../common/ersave.h"
@@ -2562,6 +2565,19 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
                 }
             }
         } else {
+            /* Per-game selftest dispatchers (DSR, DS2S, Sekiro) */
+            {
+                int handled = praxis_selftest_dsr_dispatch(argc, argv, sub);
+                if (handled != -1) return handled;
+            }
+            {
+                int handled = praxis_selftest_ds2_dispatch(argc, argv, sub);
+                if (handled != -1) return handled;
+            }
+            {
+                int handled = praxis_selftest_sekiro_dispatch(argc, argv, sub);
+                if (handled != -1) return handled;
+            }
             st_printf(L"unknown selftest subcommand: %ls\n", sub);
             exit_code = 2;
         }

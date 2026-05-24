@@ -264,8 +264,9 @@ static bool praxis_make_min_valid_dsr_sl2(const wchar_t *path, uint64_t userid) 
         /* Encrypt into file buffer at slot_offset + 32 (after MD5 + IV) */
         ct_buf = file_data + slot_offset + DSR_MD5_HEADER_SIZE + 16u;
         CopyMemory(iv_scratch, DSR_TEST_IV, 16);
+        /* flags=0: no PKCS7 padding — plaintext sizes are already multiples of 16 */
         status = BCryptEncrypt(key, (PUCHAR)plaintext, pt_size, NULL, iv_scratch, 16,
-                                ct_buf, ct_size, &ct_written, BCRYPT_BLOCK_PADDING);
+                                ct_buf, ct_size, &ct_written, 0);
         if (!NT_SUCCESS(status) || ct_written != ct_size) {
             LocalFree(plaintext);
             ok = false;
