@@ -1659,16 +1659,25 @@ int praxis_selftest_run(int argc, wchar_t **argv) {
                 exit_code = 0;
             }
         } else if (wcscmp(sub, L"backend-vtable-shape") == 0) {
-            const game_backend_t *bvt = backend_registry_get_default();
-            if (!bvt) {
+            /* Iterate every registered backend and print its vtable shape so the
+             * verification sweep can confirm all backends expose the expected
+             * methods. Exit 1 if the registry is empty. */
+            size_t bvt_count = backend_registry_count();
+            if (bvt_count == 0) {
                 st_printf(L"no backend\n");
                 exit_code = 1;
             } else {
-                st_printf(L"id=%d\n", (int)bvt->id);
-                st_printf(L"display_name=%ls\n", bvt->display_name);
-                st_printf(L"has_get_active_slot=%d\n", bvt->get_active_slot ? 1 : 0);
-                st_printf(L"has_backup_slot=%d\n", bvt->backup_slot ? 1 : 0);
-                st_printf(L"has_restore_slot=%d\n", bvt->restore_slot ? 1 : 0);
+                st_printf(L"count=%zu\n", bvt_count);
+                for (size_t bvt_i = 0; bvt_i < bvt_count; bvt_i++) {
+                    const game_backend_t *bvt = backend_registry_get_at(bvt_i);
+                    if (!bvt) continue;
+                    st_printf(L"---\n");
+                    st_printf(L"id=%d\n", (int)bvt->id);
+                    st_printf(L"display_name=%ls\n", bvt->display_name);
+                    st_printf(L"has_get_active_slot=%d\n", bvt->get_active_slot ? 1 : 0);
+                    st_printf(L"has_backup_slot=%d\n", bvt->backup_slot ? 1 : 0);
+                    st_printf(L"has_restore_slot=%d\n", bvt->restore_slot ? 1 : 0);
+                }
                 exit_code = 0;
             }
         } else if (wcscmp(sub, L"profile-resolve-active") == 0) {

@@ -1,6 +1,6 @@
 # Praxis
 
-Praxis is a practice save tool for Elden Ring and Dark Souls III that allows you to quickly backup and restore save files using global hotkeys. It features a tree-structured save library and automatic ring backups to ensure you never lose progress.
+Praxis is a practice save tool for Elden Ring, Dark Souls III, Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, and Sekiro: Shadows Die Twice that allows you to quickly backup and restore save files using global hotkeys. It features a tree-structured save library and automatic ring backups to ensure you never lose progress.
 
 ## Features
 
@@ -9,7 +9,17 @@ Praxis is a practice save tool for Elden Ring and Dark Souls III that allows you
 - **Tree-Structured Save Library** — Organize your saves in a hierarchical tree view. Rename, move, and delete saves with ease.
 - **Recycle Bin Support** — Deleted saves are moved to the Windows Recycle Bin.
 - **Ring Backup System** — Automatically maintains a 5-slot FIFO ring of backups every time you restore, allowing you to undo the last restore operation.
-- **Multi-Game Ready** — Designed with a backend interface to support multiple games (currently implements Elden Ring and Dark Souls III).
+- **Multi-Game Ready** — Designed with a backend interface to support multiple games (currently implements Elden Ring, Dark Souls III, Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, and Sekiro: Shadows Die Twice).
+
+## Supported Games
+
+| Game | Save File | Save Folder |
+|------|-----------|-------------|
+| Elden Ring | ER0000.sl2 | %APPDATA%\EldenRing\<decimal_steamid>\ |
+| Dark Souls III | DS30000.sl2 | %APPDATA%\DarkSoulsIII\<hex16>\ |
+| Dark Souls Remastered | DRAKS0005.sl2 | Documents\NBGI\DARK SOULS REMASTERED\<decimal_lower32>\ |
+| Dark Souls II: Scholar of the First Sin | DS2SOFS0000.sl2 | %APPDATA%\DarkSoulsII\<hex16>\ |
+| Sekiro: Shadows Die Twice | S0000.sl2 | %APPDATA%\Sekiro\<decimal_steamid>\ |
 
 ## Default Hotkeys
 
@@ -37,7 +47,7 @@ Refer to the root [README.md](../../README.md) for build instructions. Once buil
 
 ## Backend Interface
 
-Praxis uses a compile-time vtable (`game_backend_t`) defined in `src/Praxis/game_backend.h`. This allows the core logic to remain game-agnostic while specific backends (like `er_backend.c` for Elden Ring and `ds3_backend.c` for Dark Souls III) handle the details of save file locations and slot manipulation.
+Praxis uses a compile-time vtable (`game_backend_t`) defined in `src/Praxis/game_backend.h`. This allows the core logic to remain game-agnostic while specific backends (like `er_backend.c` for Elden Ring, `ds3_backend.c` for Dark Souls III, `dsr_backend.c` for Dark Souls Remastered, `ds2_backend.c` for Dark Souls II: Scholar of the First Sin, and `sekiro_backend.c` for Sekiro: Shadows Die Twice) handle the details of save file locations and slot manipulation.
 
 ## Profiles
 

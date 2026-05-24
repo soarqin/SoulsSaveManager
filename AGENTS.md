@@ -31,6 +31,9 @@ ERSaveManager/
     ├── CMakeLists.txt      # add_subdirectory(common/ERSaveManager/Praxis)
     ├── common/             # src/common: Static library: ersave, save_compress, file_dialog, locale_core, config_core, theme_core
     │   ├── theme_core.c/h  # Generic Win32 dark/light theme infrastructure (shared between apps)
+    │   ├── dsrsave.c/h     # Dark Souls Remastered save handling
+    │   ├── ds2save.c/h     # Dark Souls II: Scholar of the First Sin save handling
+    │   ├── sekirosave.c/h  # Sekiro: Shadows Die Twice save handling
     │   └── CMakeLists.txt
     ├── ERSaveManager/      # src/ERSaveManager: ERSaveManager executable sources
     │   ├── theme.c/h       # Per-app dark/light theme glue module
@@ -39,9 +42,18 @@ ERSaveManager/
         ├── CMakeLists.txt
         ├── backends/
         │   ├── er_backend.c            # Elden Ring backend vtable instance
-        │   └── ds3_backend.c           # Dark Souls III backend vtable instance
+        │   ├── ds3_backend.c           # Dark Souls III backend vtable instance
+        │   ├── dsr_backend.c           # Dark Souls Remastered backend vtable instance
+        │   ├── ds2_backend.c           # Dark Souls II: Scholar of the First Sin backend vtable instance
+        │   └── sekiro_backend.c        # Sekiro: Shadows Die Twice backend vtable instance
         ├── bnd4_test_format.h          # BND4 selftest constants (magic bytes, offsets)
+        ├── dsr_test_format.h           # DSR-specific selftest constants
+        ├── ds2_test_format.h           # DS2-specific selftest constants
+        ├── sekiro_test_format.h        # Sekiro-specific selftest constants
         ├── praxis_selftest.c/h         # Selftest subcommand dispatcher (linked into PraxisSelftest only)
+        ├── selftest_dsr.c/h            # DSR-specific selftest implementations
+        ├── selftest_ds2.c/h            # DS2-specific selftest implementations
+        ├── selftest_sekiro.c/h         # Sekiro-specific selftest implementations
         ├── selftest_main.c             # Console wmain() entry point for PraxisSelftest.exe
         ├── praxis_hotkey_actions.c/h   # Hotkey action handlers (backup/restore/undo)
         ├── praxis_main_menu.c/h        # Dynamic main menu construction
@@ -142,6 +154,21 @@ cmake --build build --config Release --target praxis_selftest # PraxisSelftest.e
   - `ds3-null-guards` — creates/deletes its own tmp internally (safe)
   - `ds3-import-resigns-userid <srcA> <dstB>` — creates fixtures at `<srcA>` and `<dstB>`, **deletes both**
   - `ds3-real-save-roundtrip-readonly <path> <tmp_copy>` — reads `<path>` (safe), writes/deletes `<tmp_copy>`
+  - `dsr-load-min-fixture <tmp>` — build DSR fixture, load, assert structure ⚠️ destructive
+  - `dsr-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `dsr-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
+  - `dsr-cross-account-import <srcA> <dstB>` — verify import works across accounts ⚠️ destructive
+  - `ds2s-load-min-fixture <tmp>` — build DS2S fixture, load, assert structure ⚠️ destructive
+  - `ds2s-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `ds2s-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
+  - `ds2s-dual-slot-roundtrip <tmp>` — verify dual-slot (part A + part B) serialization ⚠️ destructive
+  - `ds2s-import-resigns-userid-text <srcA> <dstB>` — verify text Steam ID re-ownership on import ⚠️ destructive
+  - `ds2s-available-slots-by-profile-byte <tmp>` — verify availability via profile int32 flag ⚠️ destructive
+  - `ds2s-bnd4-entry-count <tmp>` — assert BND4 entry count == 23 ⚠️ destructive
+  - `sekiro-load-min-fixture <tmp>` — build Sekiro fixture, load, assert structure ⚠️ destructive
+  - `sekiro-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `sekiro-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
+  - `sekiro-import-resigns-userid <srcA> <dstB>` — verify Steam ID re-signing on import ⚠️ destructive
 - **Read-only subcommands** (safe to pass real save paths):
   - `ds3-real-save-load <path>` — load real DS3 save, print slot availability; **does not modify file**
   - `ds3-real-save-classify <path>` — verify BND4 magic + slot count; **does not modify file**
@@ -185,6 +212,35 @@ cmake --build build --config Release --target praxis_selftest # PraxisSelftest.e
   - `ds3-real-save-roundtrip-readonly <path> <tmp_copy>` — copy real save, no-op roundtrip, assert reload OK
   - `ds3-dump-summary <path>` — print ACTIVE_OFFSET / AVAILABLE_OFFSET bytes from decrypted summary for diagnosis
   - `ds3-backup-slot <src_save> <slot> <dst_backup>` — backup one DS3 slot to a `.ds3sm` file using DS3 backend directly
+  - `dsr-aes-known-vector` — AES-128-CBC KAT for DSR key
+  - `dsr-null-guards` — verify null-guard behavior in dsrsave public API
+  - `dsr-load-min-fixture <tmp>` — build DSR fixture, load, assert structure ⚠️ destructive
+  - `dsr-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `dsr-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
+  - `dsr-cross-account-import <srcA> <dstB>` — verify import works across accounts ⚠️ destructive
+  - `dsr-real-save-load <path>` — load real DSR save, print slot availability
+  - `dsr-real-save-classify <path>` — verify BND4 magic + slot count of real save
+  - `dsr-real-save-roundtrip-readonly <path> <tmp_copy>` — copy real save, no-op roundtrip, assert reload OK
+  - `ds2s-aes-known-vector` — AES-128-CBC KAT for DS2S key
+  - `ds2s-null-guards` — verify null-guard behavior in ds2save public API
+  - `ds2s-load-min-fixture <tmp>` — build DS2S fixture, load, assert structure ⚠️ destructive
+  - `ds2s-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `ds2s-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
+  - `ds2s-dual-slot-roundtrip <tmp>` — verify dual-slot (part A + part B) serialization ⚠️ destructive
+  - `ds2s-import-resigns-userid-text <srcA> <dstB>` — verify text Steam ID re-ownership on import ⚠️ destructive
+  - `ds2s-available-slots-by-profile-byte <tmp>` — verify availability via profile int32 flag ⚠️ destructive
+  - `ds2s-bnd4-entry-count <tmp>` — assert BND4 entry count == 23 ⚠️ destructive
+  - `ds2s-real-save-load <path>` — load real DS2S save, print slot availability
+  - `ds2s-real-save-classify <path>` — verify BND4 magic + slot count of real save
+  - `ds2s-real-save-roundtrip-readonly <path> <tmp_copy>` — copy real save, no-op roundtrip, assert reload OK
+  - `sekiro-null-guards` — verify null-guard behavior in sekirosave public API
+  - `sekiro-load-min-fixture <tmp>` — build Sekiro fixture, load, assert structure ⚠️ destructive
+  - `sekiro-roundtrip-byte-stable <tmp>` — round-trip a no-op import, assert binary equality ⚠️ destructive
+  - `sekiro-active-slot <tmp> <expected_int>` — assert active slot matches ⚠️ destructive
+  - `sekiro-import-resigns-userid <srcA> <dstB>` — verify Steam ID re-signing on import ⚠️ destructive
+  - `sekiro-real-save-load <path>` — load real Sekiro save, print slot availability
+  - `sekiro-real-save-classify <path>` — verify BND4 magic + slot count of real save
+  - `sekiro-real-save-roundtrip-readonly <path> <tmp_copy>` — copy real save, no-op roundtrip, assert reload OK
   - `provision-sl2 <output_path>` — create minimal valid ER save fixture and leave on disk
   - `provision-ds3-sl2 <output_path>` — create minimal valid DS3 save fixture and leave on disk
 

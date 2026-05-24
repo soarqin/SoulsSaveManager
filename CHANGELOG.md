@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > so all users start with default hotkeys.
 
 ### Added
+- Praxis: Support for Dark Souls Remastered (`.dsrsave` backup format)
+- Praxis: Support for Dark Souls II: Scholar of the First Sin (`.ds2save` backup format)
+- Praxis: Support for Sekiro: Shadows Die Twice (`.seksave` backup format)
 - Dark Souls III save backup/restore support in Praxis
 - New `ds3save` module in `src/common/` providing the Praxis-runtime save API for Dark Souls III
 - New `ds3_backend` registered in the Praxis backend registry alongside the existing Elden Ring backend
