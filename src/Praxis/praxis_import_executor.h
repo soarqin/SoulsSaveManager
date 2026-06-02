@@ -27,6 +27,7 @@ typedef enum import_mode_e {
  * @param hwnd       Parent window handle.
  * @param store      Active profile store.
  * @param save_tree  Save tree widget (used for target directory and refresh).
+ * @param src_root   The root directory that was scanned (used to preserve relative subdir structure).
  * @param results    Scan result array.
  * @param selected   Bool array parallel to results; true means import this item.
  * @param count      Length of the arrays.
@@ -34,5 +35,6 @@ typedef enum import_mode_e {
  * @return Number of successfully imported files (>= 0).
  */
 int praxis_import_execute(HWND hwnd, profile_store_t *store, save_tree_t *save_tree,
+                          const wchar_t *src_root,
                           const import_scan_result_t *results, const bool *selected,
                           size_t count, import_mode_t mode);

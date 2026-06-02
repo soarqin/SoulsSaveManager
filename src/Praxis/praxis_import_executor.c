@@ -76,18 +76,87 @@ static int comp_level_to_lzma(compression_level_t cl) {
     }
 }
 
-static void make_import_filename(const wchar_t *base_dir, const wchar_t *prefix,
-                                 const wchar_t *ext, wchar_t *out, size_t out_chars) {
-    SYSTEMTIME st;
-    if (!base_dir || !prefix || !ext || !out || out_chars == 0) {
-        return;
+static bool get_relative_path(const wchar_t *base, const wchar_t *full,
+                              wchar_t *out, size_t out_chars) {
+    size_t base_len;
+    if (!base || !full || !out || out_chars == 0) {
+        return false;
     }
-    GetLocalTime(&st);
-    _snwprintf_s(out, out_chars, _TRUNCATE,
-        L"%ls\\%ls_%04d%02d%02d_%02d%02d%02d%ls",
-        base_dir, prefix,
-        st.wYear, st.wMonth, st.wDay,
-        st.wHour, st.wMinute, st.wSecond, ext);
+    base_len = wcslen(base);
+    if (base_len > 0 && base[base_len - 1] == L'\\') {
+        base_len--;
+    }
+    if (_wcsnicmp(full, base, base_len) != 0) {
+        return false;
+    }
+    if (full[base_len] == L'\\') {
+        base_len++;
+    }
+    lstrcpynW(out, full + base_len, (int)out_chars);
+    return true;
+}
+
+static bool ensure_directory_exists(const wchar_t *path) {
+    DWORD attrs = GetFileAttributesW(path);
+    if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY)) {
+        return true;
+    }
+    {
+        wchar_t parent[MAX_PATH];
+        wchar_t *slash;
+        lstrcpynW(parent, path, MAX_PATH);
+        slash = wcsrchr(parent, L'\\');
+        if (slash) {
+            *slash = L'\0';
+            if (parent[0] != L'\0') {
+                ensure_directory_exists(parent);
+            }
+        }
+    }
+    return CreateDirectoryW(path, NULL) != 0 || GetLastError() == ERROR_ALREADY_EXISTS;
+}
+
+static bool build_import_path(const wchar_t *src_root, const wchar_t *src_full_path,
+                              const wchar_t *dst_dir, const wchar_t *ext,
+                              wchar_t *out, size_t out_chars) {
+    wchar_t rel_path[MAX_PATH];
+    wchar_t final_path[MAX_PATH];
+    wchar_t *dot;
+    wchar_t *last_slash;
+
+    if (!src_root || !src_full_path || !dst_dir || !ext || !out || out_chars == 0) {
+        return false;
+    }
+
+    if (!get_relative_path(src_root, src_full_path, rel_path, MAX_PATH)) {
+        /* Fallback: use just the file name if relative path fails. */
+        const wchar_t *name = wcsrchr(src_full_path, L'\\');
+        lstrcpynW(rel_path, name ? name + 1 : src_full_path, MAX_PATH);
+    }
+
+    /* Replace extension with the target backend extension. */
+    dot = wcsrchr(rel_path, L'.');
+    if (dot) {
+        *dot = L'\0';
+    }
+
+    if (_snwprintf_s(final_path, MAX_PATH, _TRUNCATE, L"%ls\\%ls%ls",
+                     dst_dir, rel_path, ext) < 0) {
+        return false;
+    }
+
+    /* Ensure parent directories exist. */
+    lstrcpynW(rel_path, final_path, MAX_PATH);
+    last_slash = wcsrchr(rel_path, L'\\');
+    if (last_slash) {
+        *last_slash = L'\0';
+        if (!ensure_directory_exists(rel_path)) {
+            return false;
+        }
+    }
+
+    lstrcpynW(out, final_path, (int)out_chars);
+    return true;
 }
 
 static bool read_file_to_buffer(const wchar_t *path, uint8_t **out_buf, size_t *out_size) {
@@ -185,6 +254,7 @@ static bool import_as_slot(const game_backend_t *backend, const wchar_t *src_pat
 }
 
 int praxis_import_execute(HWND hwnd, profile_store_t *store, save_tree_t *save_tree,
+                          const wchar_t *src_root,
                           const import_scan_result_t *results, const bool *selected,
                           size_t count, import_mode_t mode) {
     const backup_profile_t *bp = profile_store_get_active_backup(store);
@@ -197,7 +267,7 @@ int praxis_import_execute(HWND hwnd, profile_store_t *store, save_tree_t *save_t
 
     (void)hwnd;
 
-    if (!bp || !backend) {
+    if (!bp || !backend || !src_root) {
         return -1;
     }
 
@@ -218,7 +288,9 @@ int praxis_import_execute(HWND hwnd, profile_store_t *store, save_tree_t *save_t
             continue;
         }
 
-        make_import_filename(dst_dir, L"imported", ext, dst_path, MAX_PATH);
+        if (!build_import_path(src_root, results[i].full_path, dst_dir, ext, dst_path, MAX_PATH)) {
+            continue;
+        }
 
         if (mode == IMPORT_MODE_ORIGINAL) {
             if (results[i].kind == SAVE_KIND_FULL) {

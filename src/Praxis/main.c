@@ -211,6 +211,7 @@ static void run_import_flow(HWND hwnd, import_mode_t mode) {
 
     if (dialog_import_show(hwnd, scan.items, scan.count, selected) == IDOK) {
         imported_count = praxis_import_execute(hwnd, &g_profile_store, g_app.save_tree,
+                                                folder_path,
                                                 scan.items, selected, scan.count, mode);
         if (imported_count > 0 && g_app.save_tree) {
             save_tree_refresh(g_app.save_tree);
