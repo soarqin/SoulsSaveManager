@@ -12,6 +12,7 @@ cmake-build-*/
 .codex/
 .gemini/
 .opencode/
+.codegraph/
 
 # Compiled objects and binaries
 *.obj
