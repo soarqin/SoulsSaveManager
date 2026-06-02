@@ -46,6 +46,12 @@ add_project(praxis WIN32
     dialogs/edit_backup_profile.h
     dialogs/hotkey_settings.c
     dialogs/hotkey_settings.h
+    dialogs/import_dialog.c
+    dialogs/import_dialog.h
+    praxis_import_scanner.c
+    praxis_import_scanner.h
+    praxis_import_executor.c
+    praxis_import_executor.h
     backends/er_backend.c
     backends/ds3_backend.c
     backends/dsr_backend.c

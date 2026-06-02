@@ -25,6 +25,9 @@
 #include "dialogs/game_profile_manager.h"
 #include "dialogs/edit_backup_profile.h"
 #include "dialogs/hotkey_settings.h"
+#include "dialogs/import_dialog.h"
+#include "praxis_import_scanner.h"
+#include "praxis_import_executor.h"
 #include "../common/ersave.h"
 #include "../common/save_compress.h"
 
@@ -180,6 +183,45 @@ static void run_hotkey_action(HWND hwnd, hotkey_id_t hotkey_id) {
     }
 }
 
+static void run_import_flow(HWND hwnd, import_mode_t mode) {
+    wchar_t *folder_path = file_dialog_open_folder(hwnd, NULL);
+    import_scan_list_t scan = {0};
+    bool *selected = NULL;
+    int imported_count = 0;
+
+    if (!folder_path) {
+        return;
+    }
+
+    import_scan_list_init(&scan);
+    if (!import_scan_directory(folder_path, &scan) || scan.count == 0) {
+        MessageBoxW(hwnd, praxis_locale_str(STR_PRAXIS_IMPORT_NO_SAVES_FOUND),
+                    praxis_locale_str(STR_PRAXIS_IMPORT_DIALOG_TITLE), MB_OK | MB_ICONINFORMATION);
+        CoTaskMemFree(folder_path);
+        import_scan_list_free(&scan);
+        return;
+    }
+
+    selected = (bool *)LocalAlloc(LMEM_FIXED, sizeof(bool) * scan.count);
+    if (!selected) {
+        CoTaskMemFree(folder_path);
+        import_scan_list_free(&scan);
+        return;
+    }
+
+    if (dialog_import_show(hwnd, scan.items, scan.count, selected) == IDOK) {
+        imported_count = praxis_import_execute(hwnd, &g_profile_store, g_app.save_tree,
+                                                scan.items, selected, scan.count, mode);
+        if (imported_count > 0 && g_app.save_tree) {
+            save_tree_refresh(g_app.save_tree);
+        }
+    }
+
+    LocalFree(selected);
+    import_scan_list_free(&scan);
+    CoTaskMemFree(folder_path);
+}
+
 static LRESULT praxis_window_on_command(HWND hwnd, WPARAM wp) {
     if (praxis_main_menu_handle_command(hwnd, wp, &g_profile_store)) {
         if (g_app.toolbar) toolbar_apply_locale_strings(g_app.toolbar);
@@ -249,6 +291,12 @@ static LRESULT praxis_window_on_command(HWND hwnd, WPARAM wp) {
         return 0;
     case IDC_BTN_DEL_BACKUP:
         handle_delete_backup(hwnd, WM_WATCHER_NOTIFY);
+        return 0;
+    case IDM_FILE_IMPORT_ORIGINAL:
+        run_import_flow(hwnd, IMPORT_MODE_ORIGINAL);
+        return 0;
+    case IDM_FILE_IMPORT_SLOT:
+        run_import_flow(hwnd, IMPORT_MODE_SINGLE_SLOT);
         return 0;
     case IDM_FILE_EXIT:
         SendMessageW(hwnd, WM_CLOSE, 0, 0);

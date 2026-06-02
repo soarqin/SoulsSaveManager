@@ -43,6 +43,10 @@ void praxis_main_menu_apply_locale_strings(HWND hwnd) {
     if (file_menu) {
         ModifyMenuW(menu, 0, MF_BYPOSITION | MF_POPUP, (UINT_PTR)file_menu,
             praxis_locale_str(STR_PRAXIS_FILE));
+        ModifyMenuW(file_menu, IDM_FILE_IMPORT_ORIGINAL, MF_BYCOMMAND | MF_STRING, IDM_FILE_IMPORT_ORIGINAL,
+            praxis_locale_str(STR_PRAXIS_IMPORT_ORIGINAL));
+        ModifyMenuW(file_menu, IDM_FILE_IMPORT_SLOT, MF_BYCOMMAND | MF_STRING, IDM_FILE_IMPORT_SLOT,
+            praxis_locale_str(STR_PRAXIS_IMPORT_SINGLE_SLOT));
         ModifyMenuW(file_menu, IDM_FILE_EXIT, MF_BYCOMMAND | MF_STRING, IDM_FILE_EXIT,
             praxis_locale_str(STR_PRAXIS_EXIT));
     }

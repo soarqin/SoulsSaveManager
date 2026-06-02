@@ -8,6 +8,8 @@
 /* Menu IDs */
 #define IDR_MAIN_MENU       100
 #define IDM_FILE_EXIT       103
+#define IDM_FILE_IMPORT_ORIGINAL    104
+#define IDM_FILE_IMPORT_SLOT        105
 #define IDM_GAME_MANAGE     131
 #define IDM_GAME_PROFILE_FIRST 1300
 #define IDM_GAME_PROFILE_LAST  1399
@@ -47,6 +49,12 @@
 #define IDD_GAME_PROFILE_MANAGER 310
 #define IDD_EDIT_GAME_PROFILE    311
 #define IDD_EDIT_BACKUP_PROFILE  312
+#define IDD_IMPORT_DIALOG        320
+
+/* Import Dialog Controls */
+#define IDC_IMPORT_LIST             5001
+#define IDC_IMPORT_SELECT_ALL       5002
+#define IDC_IMPORT_DESELECT_ALL     5003
 
 /* === Game Profile Manager Dialog Controls === */
 #define IDC_GPM_LIST   4001

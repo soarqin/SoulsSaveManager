@@ -39,6 +39,9 @@ IDR_MAIN_MENU MENU
 BEGIN
      POPUP "&File"
      BEGIN
+         MENUITEM "Import as Original Format...", IDM_FILE_IMPORT_ORIGINAL
+         MENUITEM "Import as Single Slot...", IDM_FILE_IMPORT_SLOT
+         MENUITEM SEPARATOR
          MENUITEM "E&xit", IDM_FILE_EXIT
      END
     POPUP "&Game"
@@ -141,5 +144,18 @@ BEGIN
     PUSHBUTTON  "Cancel",          IDCANCEL,     226, 178, 60, 14
 END
 
-
+/* Import Save Files dialog */
+IDD_IMPORT_DIALOG DIALOGEX 0, 0, 480, 280
+STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Select Saves to Import"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    CONTROL         "", IDC_IMPORT_LIST, "SysListView32",
+                    LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,
+                    8, 8, 464, 230
+    PUSHBUTTON      "Select All",   IDC_IMPORT_SELECT_ALL,   8,  250, 70, 14
+    PUSHBUTTON      "Deselect All", IDC_IMPORT_DESELECT_ALL, 84, 250, 70, 14
+    DEFPUSHBUTTON   "Import",       IDOK,                    340, 250, 60, 14
+    PUSHBUTTON      "Cancel",       IDCANCEL,                404, 250, 60, 14
+END
 
