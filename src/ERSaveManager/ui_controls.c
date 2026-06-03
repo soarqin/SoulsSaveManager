@@ -16,6 +16,7 @@
 #include "save_compress.h"
 #include "theme.h"
 #include "theme_core.h"
+#include "ui_layout.h"
 #include <stdint.h>
 #include <wchar.h>
 #include <windows.h>
@@ -169,7 +170,7 @@ void ui_create_controls(HWND hwnd, HMODULE module) {
     button_change_folder = CreateWindowW(
         L"BUTTON", locale_str(STR_CHANGE_SAVE_FOLDER),
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        10, 10, 160, 25,
+        UI_MARGIN, UI_MARGIN, 160, UI_BTN_HEIGHT,
         hwnd, (HMENU)IDC_BUTTON_CHANGE_FOLDER, module, NULL
     );
     SendMessage(button_change_folder, WM_SETFONT, (WPARAM)default_font, TRUE);
@@ -178,7 +179,7 @@ void ui_create_controls(HWND hwnd, HMODULE module) {
     combo_box_save_folder = CreateWindowW(
         L"COMBOBOX", L"",
         WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST,
-        170, 10, 200, 25,
+        UI_MARGIN + 160 + UI_GAP_SMALL, UI_MARGIN, 200, UI_COMBO_HEIGHT,
         hwnd, (HMENU)IDC_COMBO_SAVE_FOLDER, module, NULL
     );
     SendMessage(combo_box_save_folder, WM_SETFONT, (WPARAM)default_font, TRUE);
@@ -187,17 +188,18 @@ void ui_create_controls(HWND hwnd, HMODULE module) {
     label_chars = CreateWindowW(
         L"STATIC", locale_str(STR_CHARACTERS),
         WS_CHILD | WS_VISIBLE | SS_LEFT,
-        10, 45, 200, 20,
+        UI_MARGIN, UI_MARGIN + UI_BTN_HEIGHT + UI_GAP_MEDIUM, 200, 20,
         hwnd, (HMENU)6, module, NULL
     );
     SendMessage(label_chars, WM_SETFONT, (WPARAM)default_font, TRUE);
 
     /* Create Characters ListView */
+    int list_view_y = UI_MARGIN + UI_BTN_HEIGHT + UI_GAP_MEDIUM + 20 + UI_GAP_SMALL;
     list_view_chars = CreateWindowExW(
         WS_EX_CLIENTEDGE,
         WC_LISTVIEW, L"",
         WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL,
-        10, 65, 200, 280,
+        UI_MARGIN, list_view_y, 200, 280,
         hwnd, (HMENU)4, module, NULL
     );
     ListView_SetExtendedListViewStyleEx(list_view_chars,
@@ -327,7 +329,7 @@ void ui_create_controls(HWND hwnd, HMODULE module) {
     button_manage_faces = CreateWindowW(
         L"BUTTON", locale_str(STR_MANAGE_FACES),
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        380, 10, 120, 25,
+        380, UI_MARGIN, 120, UI_BTN_HEIGHT,
         hwnd, (HMENU)IDC_BUTTON_MANAGE_FACES, module, NULL
     );
     SendMessage(button_manage_faces, WM_SETFONT, (WPARAM)default_font, TRUE);
@@ -440,16 +442,16 @@ static int calculate_detail_panel_width(HWND hwnd, int *out_label_w) {
     SelectObject(hdc, old_font);
     ReleaseDC(hwnd, hdc);
 
-    /* Layout: [12px pad | label | 8px gap | 50px value | 12px pad] */
+    /* Layout: [UI_MARGIN pad | label | UI_GAP_SMALL gap | 50px value | UI_MARGIN pad] */
     int label_w = max_label_w + 4;
     int value_w = 50;
-    int detail_w = 12 + label_w + 8 + value_w + 12;
+    int detail_w = UI_MARGIN + label_w + UI_GAP_SMALL + value_w + UI_MARGIN;
 
     /* Ensure group box title fits (title text + frame chrome) */
-    int min_for_title = title_sz.cx + 24;
+    int min_for_title = title_sz.cx + UI_MARGIN * 2;
     if (detail_w < min_for_title) {
         detail_w = min_for_title;
-        label_w = detail_w - 12 - 8 - value_w - 12;
+        label_w = detail_w - UI_MARGIN - UI_GAP_SMALL - value_w - UI_MARGIN;
     }
 
     /* Clamp to reasonable bounds */
@@ -462,20 +464,19 @@ static int calculate_detail_panel_width(HWND hwnd, int *out_label_w) {
 
 void ui_layout_controls(HWND hwnd, int width, int height) {
     int btn_face_w = 120;
-    int gap = 10;
     int label_w;
     int detail_w = calculate_detail_panel_width(hwnd, &label_w);
-    int detail_x = width - gap - detail_w;
-    int list_w = detail_x - gap - gap;
-    int content_y = 65;
-    int content_h = height - 75;
+    int detail_x = width - UI_MARGIN - detail_w;
+    int list_w = detail_x - UI_MARGIN - UI_MARGIN;
+    int content_y = UI_MARGIN + UI_BTN_HEIGHT + UI_GAP_MEDIUM + 20 + UI_GAP_SMALL;
+    int content_h = height - content_y - UI_MARGIN;
 
     /* Reserve space for character action buttons below the ListView */
-    int btn_bar_h = 30;  /* 25px button + 5px gap */
+    int btn_bar_h = UI_BTN_HEIGHT + UI_GAP_SMALL;  /* 25px button + 8px gap */
     int list_h = content_h - btn_bar_h;
-    int btn_y = content_y + list_h + 5;
-    int btn_h = 25;
-    int btn_gap = 5;
+    int btn_y = content_y + list_h + UI_GAP_SMALL;
+    int btn_h = UI_BTN_HEIGHT;
+    int btn_gap = UI_GAP_SMALL;
     int btn_w = (list_w - btn_gap * 2) / 3;
 
     /* 5 base + 3 char buttons + group box + 8 stat pairs + 4 extra detail = 29 */
@@ -483,39 +484,41 @@ void ui_layout_controls(HWND hwnd, int width, int height) {
 
     /* Top row */
     hdwp = DeferWindowPos(hdwp, button_change_folder, NULL,
-        gap, 10, 160, 25, SWP_NOZORDER);
+        UI_MARGIN, UI_MARGIN, 160, UI_BTN_HEIGHT, SWP_NOZORDER);
     hdwp = DeferWindowPos(hdwp, combo_box_save_folder, NULL,
-        170, 10, width - 180 - btn_face_w - gap, 25, SWP_NOZORDER);
+        UI_MARGIN + 160 + UI_GAP_SMALL, UI_MARGIN,
+        width - (UI_MARGIN + 160 + UI_GAP_SMALL) - UI_GAP_SMALL - btn_face_w - UI_MARGIN,
+        UI_COMBO_HEIGHT, SWP_NOZORDER);
     hdwp = DeferWindowPos(hdwp, button_manage_faces, NULL,
-        width - gap - btn_face_w, 10, btn_face_w, 25, SWP_NOZORDER);
+        width - UI_MARGIN - btn_face_w, UI_MARGIN, btn_face_w, UI_BTN_HEIGHT, SWP_NOZORDER);
 
     /* Characters label (above list only) */
     hdwp = DeferWindowPos(hdwp, label_chars, NULL,
-        gap, 45, list_w, 20, SWP_NOZORDER);
+        UI_MARGIN, UI_MARGIN + UI_BTN_HEIGHT + UI_GAP_MEDIUM, list_w, 20, SWP_NOZORDER);
 
     /* Characters ListView (left side, shortened for button bar) */
     hdwp = DeferWindowPos(hdwp, list_view_chars, NULL,
-        gap, content_y, list_w, list_h, SWP_NOZORDER);
+        UI_MARGIN, content_y, list_w, list_h, SWP_NOZORDER);
 
     /* Character action buttons (below ListView) */
     hdwp = DeferWindowPos(hdwp, button_import_char, NULL,
-        gap, btn_y, btn_w, btn_h, SWP_NOZORDER);
+        UI_MARGIN, btn_y, btn_w, btn_h, SWP_NOZORDER);
     hdwp = DeferWindowPos(hdwp, button_export_char, NULL,
-        gap + btn_w + btn_gap, btn_y, btn_w, btn_h, SWP_NOZORDER);
+        UI_MARGIN + btn_w + btn_gap, btn_y, btn_w, btn_h, SWP_NOZORDER);
     hdwp = DeferWindowPos(hdwp, button_rename_char, NULL,
-        gap + (btn_w + btn_gap) * 2, btn_y, btn_w, btn_h, SWP_NOZORDER);
+        UI_MARGIN + (btn_w + btn_gap) * 2, btn_y, btn_w, btn_h, SWP_NOZORDER);
 
     /* Detail panel group box (right side) */
     hdwp = DeferWindowPos(hdwp, detail_group, NULL,
-        detail_x, 45, detail_w, content_h + 20, SWP_NOZORDER);
+        detail_x, UI_MARGIN + UI_BTN_HEIGHT + UI_GAP_MEDIUM, detail_w, content_h + 20, SWP_NOZORDER);
 
     /* Stat label/value rows inside the detail panel area */
-    int row_h = 24;
-    int label_x = detail_x + 12;
+    int row_h = UI_ROW_HEIGHT;
+    int label_x = detail_x + UI_MARGIN;
     /* label_w is computed by calculate_detail_panel_width() above */
-    int value_x = label_x + label_w + 8;
+    int value_x = label_x + label_w + UI_GAP_SMALL;
     int value_w = 50;
-    int first_row_y = content_y + 5;
+    int first_row_y = content_y + UI_GAP_SMALL;
 
     for (int i = 0; i < STAT_COUNT; i++) {
         int row_y = first_row_y + i * row_h;
@@ -526,7 +529,7 @@ void ui_layout_controls(HWND hwnd, int width, int height) {
     }
 
     /* Extra detail rows (runes held, death count) below the stat rows with a small gap */
-    int extra_y = first_row_y + STAT_COUNT * row_h + 4;
+    int extra_y = first_row_y + STAT_COUNT * row_h + UI_GAP_SMALL;
     hdwp = DeferWindowPos(hdwp, detail_runes_label, NULL,
         label_x, extra_y, label_w, 18, SWP_NOZORDER);
     hdwp = DeferWindowPos(hdwp, detail_runes_value, NULL,
