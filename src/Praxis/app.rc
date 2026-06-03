@@ -63,99 +63,108 @@ BEGIN
 END
 
 /* Game Profile Manager dialog */
-IDD_GAME_PROFILE_MANAGER DIALOGEX 0, 0, 360, 200
+IDD_GAME_PROFILE_MANAGER DIALOGEX 0, 0, 380, 214
 STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Manage Game Profiles"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    CONTROL         "", IDC_GPM_LIST, "SysListView32", LVS_REPORT | LVS_SINGLESEL | WS_BORDER | WS_TABSTOP, 8, 8, 344, 158
-    PUSHBUTTON      "Add",    IDC_GPM_ADD,    8, 174, 60, 14
-    PUSHBUTTON      "Edit",   IDC_GPM_EDIT,   72, 174, 60, 14
-    PUSHBUTTON      "Delete", IDC_GPM_DELETE, 136, 174, 60, 14
-    DEFPUSHBUTTON   "Close",  IDC_GPM_CLOSE,  292, 174, 60, 14
+    CONTROL         "", IDC_GPM_LIST, "SysListView32",
+                    LVS_REPORT | LVS_SINGLESEL | WS_BORDER | WS_TABSTOP,
+                    12, 12, 356, 164
+    PUSHBUTTON      "Add",    IDC_GPM_ADD,    12, 188, 60, 14
+    PUSHBUTTON      "Edit",   IDC_GPM_EDIT,   80, 188, 60, 14
+    PUSHBUTTON      "Delete", IDC_GPM_DELETE, 148, 188, 60, 14
+    DEFPUSHBUTTON   "Close",  IDC_GPM_CLOSE,  308, 188, 60, 14
 END
 
 /* Edit Game Profile dialog */
-IDD_EDIT_GAME_PROFILE DIALOGEX 0, 0, 280, 140
+IDD_EDIT_GAME_PROFILE DIALOGEX 0, 0, 300, 170
 STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Game Profile"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Name:",        IDC_EGP_LBL_NAME,      8,  8, 48, 8
-    EDITTEXT        IDC_EGP_NAME, 60, 6, 212, 14, ES_AUTOHSCROLL
-    LTEXT           "Game:",        IDC_EGP_LBL_GAME,      8, 28, 48, 8
-    COMBOBOX        IDC_EGP_GAME, 60, 26, 212, 80, CBS_DROPDOWNLIST | WS_TABSTOP
-    LTEXT           "Save File:",   IDC_EGP_LBL_SAVE_DIR,  8, 48, 48, 8
-    EDITTEXT        IDC_EGP_SAVE_DIR, 60, 46, 180, 14, ES_AUTOHSCROLL
-    PUSHBUTTON      "...", IDC_EGP_BROWSE_SAVE, 244, 46, 28, 14
-    LTEXT           "Backup Root:", IDC_EGP_LBL_TREE_ROOT, 8, 68, 48, 8
-    EDITTEXT        IDC_EGP_TREE_ROOT, 60, 66, 180, 14, ES_AUTOHSCROLL
-    PUSHBUTTON      "...", IDC_EGP_BROWSE_TREE, 244, 66, 28, 14
-    DEFPUSHBUTTON   "OK",     IDOK,     140, 118, 60, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 212, 118, 60, 14
+    LTEXT           "Name:",        IDC_EGP_LBL_NAME,      12,  14, 48, 8
+    EDITTEXT        IDC_EGP_NAME,   64, 12, 224, 14, ES_AUTOHSCROLL
+    LTEXT           "Game:",        IDC_EGP_LBL_GAME,      12, 38, 48, 8
+    COMBOBOX        IDC_EGP_GAME,   64, 36, 224, 80, CBS_DROPDOWNLIST | WS_TABSTOP
+    LTEXT           "Save File:",   IDC_EGP_LBL_SAVE_DIR,  12, 62, 48, 8
+    EDITTEXT        IDC_EGP_SAVE_DIR, 64, 60, 188, 14, ES_AUTOHSCROLL
+    PUSHBUTTON      "...", IDC_EGP_BROWSE_SAVE, 256, 60, 32, 14
+    LTEXT           "Backup Root:", IDC_EGP_LBL_TREE_ROOT, 12, 86, 48, 8
+    EDITTEXT        IDC_EGP_TREE_ROOT, 64, 84, 188, 14, ES_AUTOHSCROLL
+    PUSHBUTTON      "...", IDC_EGP_BROWSE_TREE, 256, 84, 32, 14
+    DEFPUSHBUTTON   "OK",     IDOK,     160, 144, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 228, 144, 60, 14
 END
 
 /* Edit Backup Profile dialog */
-IDD_EDIT_BACKUP_PROFILE DIALOGEX 0, 0, 280, 100
+IDD_EDIT_BACKUP_PROFILE DIALOGEX 0, 0, 300, 120
 STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Edit Backup Profile"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "Name:",       IDC_EBP_LBL_NAME,        8,  8, 48, 8
-    EDITTEXT        IDC_EBP_NAME, 60, 6, 212, 14, ES_AUTOHSCROLL
-    GROUPBOX        "Compression", IDC_EBP_LBL_COMPRESSION, 8, 28, 264, 36
-    AUTORADIOBUTTON "None",   IDC_EBP_COMP_NONE,   12, 40, 50, 10, WS_GROUP | WS_TABSTOP
-    AUTORADIOBUTTON "Low",    IDC_EBP_COMP_LOW,    66, 40, 50, 10
-    AUTORADIOBUTTON "Medium", IDC_EBP_COMP_MEDIUM, 120, 40, 60, 10
-    AUTORADIOBUTTON "High",   IDC_EBP_COMP_HIGH,   184, 40, 50, 10
-    DEFPUSHBUTTON   "OK",     IDOK,     140, 78, 60, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 212, 78, 60, 14
+    LTEXT           "Name:",       IDC_EBP_LBL_NAME,        12, 14, 48, 8
+    EDITTEXT        IDC_EBP_NAME,  64, 12, 224, 14, ES_AUTOHSCROLL
+    GROUPBOX        "Compression", IDC_EBP_LBL_COMPRESSION, 12, 40, 276, 40
+    AUTORADIOBUTTON "None",   IDC_EBP_COMP_NONE,   20, 54, 50, 10, WS_GROUP | WS_TABSTOP
+    AUTORADIOBUTTON "Low",    IDC_EBP_COMP_LOW,    78, 54, 50, 10
+    AUTORADIOBUTTON "Medium", IDC_EBP_COMP_MEDIUM, 136, 54, 60, 10
+    AUTORADIOBUTTON "High",   IDC_EBP_COMP_HIGH,   204, 54, 50, 10
+    DEFPUSHBUTTON   "OK",     IDOK,     160, 94, 60, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 228, 94, 60, 14
 END
 
 /* Hotkey Settings dialog */
-IDD_HOTKEY_SETTINGS DIALOGEX 0, 0, 300, 200
+IDD_HOTKEY_SETTINGS DIALOGEX 0, 0, 320, 260
 STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Hotkey Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT       "Backup Full:",    IDC_HK_LBL_BACKUP_FULL, 8,  10, 100, 10
+    LTEXT       "Backup Full:",    IDC_HK_LBL_BACKUP_FULL, 12, 14, 100, 10
     CONTROL     "", IDC_HK_BACKUP_FULL, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 8, 170, 14
-    LTEXT       "Backup Slot:",    IDC_HK_LBL_BACKUP_SLOT, 8,  30, 100, 10
+                WS_BORDER | WS_TABSTOP, 132, 12, 176, 14
+
+    LTEXT       "Backup Slot:",    IDC_HK_LBL_BACKUP_SLOT, 12, 42, 100, 10
     CONTROL     "", IDC_HK_BACKUP_SLOT, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 28, 170, 14
-    LTEXT       "Backup && Replace:", IDC_HK_LBL_BACKUP_REPLACE, 8, 50, 100, 10
+                WS_BORDER | WS_TABSTOP, 132, 40, 176, 14
+
+    LTEXT       "Backup && Replace:", IDC_HK_LBL_BACKUP_REPLACE, 12, 70, 100, 10
     CONTROL     "", IDC_HK_BACKUP_REPLACE, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 48, 170, 14
-    LTEXT       "Restore:",        IDC_HK_LBL_RESTORE, 8,  70, 100, 10
+                WS_BORDER | WS_TABSTOP, 132, 68, 176, 14
+
+    LTEXT       "Restore:",        IDC_HK_LBL_RESTORE, 12, 98, 100, 10
     CONTROL     "", IDC_HK_RESTORE, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 68, 170, 14
-    LTEXT       "Undo Restore:",   IDC_HK_LBL_UNDO, 8,  90, 100, 10
+                WS_BORDER | WS_TABSTOP, 132, 96, 176, 14
+
+    LTEXT       "Undo Restore:",   IDC_HK_LBL_UNDO, 12, 126, 100, 10
     CONTROL     "", IDC_HK_UNDO, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 88, 170, 14
-    LTEXT       "Previous Save:",  IDC_HK_LBL_PREVIOUS_SAVE, 8, 110, 100, 10
+                WS_BORDER | WS_TABSTOP, 132, 124, 176, 14
+
+    LTEXT       "Previous Save:",  IDC_HK_LBL_PREVIOUS_SAVE, 12, 154, 100, 10
     CONTROL     "", IDC_HK_PREVIOUS_SAVE, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 108, 170, 14
-    LTEXT       "Next Save:",      IDC_HK_LBL_NEXT_SAVE, 8, 130, 100, 10
+                WS_BORDER | WS_TABSTOP, 132, 152, 176, 14
+
+    LTEXT       "Next Save:",      IDC_HK_LBL_NEXT_SAVE, 12, 182, 100, 10
     CONTROL     "", IDC_HK_NEXT_SAVE, "msctls_hotkey32",
-                WS_BORDER | WS_TABSTOP, 116, 128, 170, 14
-    PUSHBUTTON  "Reset Defaults",  IDC_HK_RESET, 8,  178, 80, 14
-    DEFPUSHBUTTON "OK",            IDOK,         160, 178, 60, 14
-    PUSHBUTTON  "Cancel",          IDCANCEL,     226, 178, 60, 14
+                WS_BORDER | WS_TABSTOP, 132, 180, 176, 14
+
+    PUSHBUTTON  "Reset Defaults",  IDC_HK_RESET, 12,  228, 80, 14
+    DEFPUSHBUTTON "OK",            IDOK,         170, 228, 60, 14
+    PUSHBUTTON  "Cancel",          IDCANCEL,     238, 228, 60, 14
 END
 
 /* Import Save Files dialog */
-IDD_IMPORT_DIALOG DIALOGEX 0, 0, 480, 280
+IDD_IMPORT_DIALOG DIALOGEX 0, 0, 500, 300
 STYLE DS_MODALFRAME | DS_SETFONT | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Select Saves to Import"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
     CONTROL         "", IDC_IMPORT_LIST, "SysListView32",
                     LVS_REPORT | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,
-                    8, 8, 464, 230
-    PUSHBUTTON      "Select All",   IDC_IMPORT_SELECT_ALL,   8,  250, 70, 14
-    PUSHBUTTON      "Deselect All", IDC_IMPORT_DESELECT_ALL, 84, 250, 70, 14
-    DEFPUSHBUTTON   "Import",       IDOK,                    340, 250, 60, 14
-    PUSHBUTTON      "Cancel",       IDCANCEL,                404, 250, 60, 14
+                    12, 12, 476, 246
+    PUSHBUTTON      "Select All",   IDC_IMPORT_SELECT_ALL,   12,  272, 70, 14
+    PUSHBUTTON      "Deselect All", IDC_IMPORT_DESELECT_ALL, 90, 272, 70, 14
+    DEFPUSHBUTTON   "Import",       IDOK,                    356, 272, 60, 14
+    PUSHBUTTON      "Cancel",       IDCANCEL,                428, 272, 60, 14
 END
 
