@@ -15,11 +15,13 @@ face data and character slots, re-signing Steam IDs, and multi-locale UI.
 ERSaveManager/
 ├── CMakeLists.txt          # Root: sets C++ standard to C23 (C std follows toolchain default)
 ├── README.md               # Project documentation (English)
-├── CHANGELOG.md            # Keep a Changelog format
-├── LICENSE                 # MIT License
+├── CHANGELOG-ERSaveManager.md  # ERSaveManager changelog (Keep a Changelog format)
+├── CHANGELOG-Praxis.md         # Praxis changelog
+├── LICENSE                     # MIT License
 ├── .github/
 │   └── workflows/
-│       └── release.yml     # CI: build + GitHub Release on v* tags
+│       ├── release-saveman.yml # CI: ERSaveManager release on saveman-v* tags
+│       └── release-praxis.yml  # CI: Praxis release on praxis-v* tags
 ├── cmake/
 │   ├── CustomCompilerOptions.cmake   # /utf-8 flag, strip/LTO/static-CRT options
 │   ├── GlobalOptions.cmake           # Visibility presets, export compile commands
@@ -116,6 +118,24 @@ cmake --build build --config Release --target praxis_selftest # PraxisSelftest.e
   Build it with `--target praxis_selftest`; output goes to `build/bin/PraxisSelftest.exe`.
 - `CMAKE_EXPORT_COMPILE_COMMANDS=ON` is set automatically → `build/compile_commands.json`
   is generated for clangd/IDE tooling.
+
+---
+
+## Release & Versioning
+
+ERSaveManager and Praxis are released independently using distinct Git tag prefixes.
+
+| Product        | Tag Prefix    | Example           | Workflow File                  |
+|----------------|---------------|-------------------|--------------------------------|
+| ERSaveManager  | `saveman-v`   | `saveman-v1.2.0`  | `.github/workflows/release-saveman.yml` |
+| Praxis         | `praxis-v`    | `praxis-v1.0.0`   | `.github/workflows/release-praxis.yml`  |
+
+Pushing a matching tag triggers the corresponding workflow, which builds **only** that product's target, packages it with its product-specific `CHANGELOG` (renamed to `CHANGELOG.md` in the archive), `README.md`, and `LICENSE`, and publishes an independent GitHub Release.
+
+### CHANGELOG Files
+
+- `CHANGELOG-ERSaveManager.md` — ERSaveManager release history. The `[Unreleased]` section holds pending ERSaveManager/shared changes; `[1.0.0]` documents the initial release.
+- `CHANGELOG-Praxis.md` — Praxis release history. New versions are appended here.
 
 ---
 
