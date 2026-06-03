@@ -394,7 +394,7 @@ void toolbar_layout_top(toolbar_t *t, int parent_width) {
 
     /* Combo stretches; "+" / "-" and sort stay on the right of the row. */
     right_fixed = TOOLBAR_BTN_SMALL_W * 2 + TOOLBAR_SORT_COMBO_W
-        + TOOLBAR_GAP * 3 + TOOLBAR_GROUP_GAP + TOOLBAR_RIGHT_MARGIN;
+        + TOOLBAR_GAP * 2 + TOOLBAR_GROUP_GAP + TOOLBAR_RIGHT_MARGIN;
     combo_w = parent_width - right_fixed - TOOLBAR_LEFT_MARGIN;
     if (combo_w < TOOLBAR_COMBO_MIN_W) {
         combo_w = TOOLBAR_COMBO_MIN_W;
