@@ -12,6 +12,7 @@
 #include "resource.h"
 #include "theme.h"
 #include "theme_core.h"
+#include "ui_layout.h"
 #include <windows.h>
 #include <windowsx.h>
 #include <commctrl.h>
@@ -43,17 +44,16 @@ static void layout_face_dialog(HWND hwnd) {
     RECT rc;
     GetClientRect(hwnd, &rc);
 
-    int btn_h = 25;
-    int btn_gap = 5;
-    int btn_bar_h = btn_h + btn_gap;
-    int list_h = rc.bottom - btn_bar_h;
-    int btn_w = (rc.right - btn_gap * 4) / 3;
-    int btn_y = list_h + btn_gap;
+    int list_w = rc.right  - UI_MARGIN * 2;
+    int list_h = rc.bottom - UI_MARGIN - UI_GAP_SMALL - UI_BTN_HEIGHT - UI_MARGIN;
+    int list_y = UI_MARGIN;
+    int btn_w  = (list_w - UI_GAP_SMALL * 2) / 3;
+    int btn_y  = UI_MARGIN + list_h + UI_GAP_SMALL;
 
-    MoveWindow(list_view_faces, 0, 0, rc.right, list_h, TRUE);
-    MoveWindow(button_import_face, btn_gap, btn_y, btn_w, btn_h, TRUE);
-    MoveWindow(button_export_face, btn_gap * 2 + btn_w, btn_y, btn_w, btn_h, TRUE);
-    MoveWindow(button_npc_face, btn_gap * 3 + btn_w * 2, btn_y, btn_w, btn_h, TRUE);
+    MoveWindow(list_view_faces,   UI_MARGIN, list_y, list_w, list_h, TRUE);
+    MoveWindow(button_import_face, UI_MARGIN, btn_y, btn_w, UI_BTN_HEIGHT, TRUE);
+    MoveWindow(button_export_face, UI_MARGIN + btn_w + UI_GAP_SMALL, btn_y, btn_w, UI_BTN_HEIGHT, TRUE);
+    MoveWindow(button_npc_face,    UI_MARGIN + (btn_w + UI_GAP_SMALL) * 2, btn_y, btn_w, UI_BTN_HEIGHT, TRUE);
 }
 
 static void on_import_embedded_face_data(HWND hwnd, int idx, int item) {
