@@ -14,6 +14,7 @@
 #include "resource.h"
 #include "locale.h"
 #include "../common/theme_core.h"
+#include "ui_layout.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -29,10 +30,13 @@
 #define TOOLBAR_BTN_LARGE_HEIGHT 28     /* taller buttons in bottom toolbar */
 #define TOOLBAR_CTRL_Y           4
 #define TOOLBAR_BTN_LARGE_Y      5      /* center 28px button in 38px container */
-#define TOOLBAR_LEFT_MARGIN      4
-#define TOOLBAR_RIGHT_MARGIN     4
-#define TOOLBAR_GAP              4
-#define TOOLBAR_GROUP_GAP        8
+
+/* Replaced margins/gaps — now sourced from ui_layout.h */
+#define TOOLBAR_LEFT_MARGIN      UI_MARGIN      /* 12 */
+#define TOOLBAR_RIGHT_MARGIN     UI_MARGIN      /* 12 */
+#define TOOLBAR_GAP              UI_GAP_SMALL   /* 8 */
+#define TOOLBAR_GROUP_GAP        UI_GAP_MEDIUM  /* 12 */
+
 #define TOOLBAR_BTN_SMALL_W      24
 #define TOOLBAR_BTN_LARGE_MIN_W  112
 #define TOOLBAR_ACTION_BUTTON_COUNT 5
@@ -264,7 +268,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         L"BUTTON", L"+",
         BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        248, TOOLBAR_CTRL_Y, TOOLBAR_BTN_SMALL_W, TOOLBAR_CTRL_HEIGHT,
+        TOOLBAR_LEFT_MARGIN + 240 + TOOLBAR_GAP, TOOLBAR_CTRL_Y,
+        TOOLBAR_BTN_SMALL_W, TOOLBAR_CTRL_HEIGHT,
         t->hwnd_top, (HMENU)(uintptr_t)IDC_BTN_ADD_BACKUP, hinst, NULL);
 
     /* "-" — delete backup profile */
@@ -272,7 +277,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         L"BUTTON", L"-",
         BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        276, TOOLBAR_CTRL_Y, TOOLBAR_BTN_SMALL_W, TOOLBAR_CTRL_HEIGHT,
+        TOOLBAR_LEFT_MARGIN + 240 + TOOLBAR_GAP + TOOLBAR_BTN_SMALL_W + TOOLBAR_GAP, TOOLBAR_CTRL_Y,
+        TOOLBAR_BTN_SMALL_W, TOOLBAR_CTRL_HEIGHT,
         t->hwnd_top, (HMENU)(uintptr_t)IDC_BTN_DEL_BACKUP, hinst, NULL);
 
     /* File sort combobox (drop-down list — no free typing). */
@@ -280,7 +286,9 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         WC_COMBOBOXW, NULL,
         CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        304, TOOLBAR_CTRL_Y, TOOLBAR_SORT_COMBO_W, 200,
+        TOOLBAR_LEFT_MARGIN + 240 + TOOLBAR_GAP + TOOLBAR_BTN_SMALL_W * 2 + TOOLBAR_GAP * 2
+            + TOOLBAR_GROUP_GAP, TOOLBAR_CTRL_Y,
+        TOOLBAR_SORT_COMBO_W, 200,
         t->hwnd_top, (HMENU)(uintptr_t)IDC_SORT_COMBO, hinst, NULL);
 
     /* --- Bottom container children: 5 action buttons --- */
@@ -298,7 +306,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         L"BUTTON", praxis_locale_str(STR_PRAXIS_TIP_BACKUP_SLOT),
         BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        120, TOOLBAR_BTN_LARGE_Y, TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
+        TOOLBAR_LEFT_MARGIN + TOOLBAR_BTN_LARGE_MIN_W + TOOLBAR_GAP, TOOLBAR_BTN_LARGE_Y,
+        TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
         t->hwnd_bottom, (HMENU)(uintptr_t)IDC_BTN_BACKUP_SLOT, hinst, NULL);
 
     /* "Backup & Replace" */
@@ -306,7 +315,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         L"BUTTON", praxis_locale_str(STR_PRAXIS_TIP_BACKUP_REPLACE),
         BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        236, TOOLBAR_BTN_LARGE_Y, TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
+        TOOLBAR_LEFT_MARGIN + (TOOLBAR_BTN_LARGE_MIN_W + TOOLBAR_GAP) * 2, TOOLBAR_BTN_LARGE_Y,
+        TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
         t->hwnd_bottom, (HMENU)(uintptr_t)IDC_BTN_BACKUP_REPLACE, hinst, NULL);
 
     /* "Restore" */
@@ -314,7 +324,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         L"BUTTON", praxis_locale_str(STR_PRAXIS_TIP_RESTORE),
         BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        352, TOOLBAR_BTN_LARGE_Y, TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
+        TOOLBAR_LEFT_MARGIN + (TOOLBAR_BTN_LARGE_MIN_W + TOOLBAR_GAP) * 3, TOOLBAR_BTN_LARGE_Y,
+        TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
         t->hwnd_bottom, (HMENU)(uintptr_t)IDC_BTN_RESTORE, hinst, NULL);
 
     /* "Undo Last Restore" */
@@ -322,7 +333,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
         0,
         L"BUTTON", praxis_locale_str(STR_PRAXIS_TIP_UNDO),
         BS_PUSHBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        468, TOOLBAR_BTN_LARGE_Y, TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
+        TOOLBAR_LEFT_MARGIN + (TOOLBAR_BTN_LARGE_MIN_W + TOOLBAR_GAP) * 4, TOOLBAR_BTN_LARGE_Y,
+        TOOLBAR_BTN_LARGE_MIN_W, TOOLBAR_BTN_LARGE_HEIGHT,
         t->hwnd_bottom, (HMENU)(uintptr_t)IDC_BTN_UNDO, hinst, NULL);
 
     /* Bail out if any control failed to create. Both container windows will
@@ -382,7 +394,7 @@ void toolbar_layout_top(toolbar_t *t, int parent_width) {
 
     /* Combo stretches; "+" / "-" and sort stay on the right of the row. */
     right_fixed = TOOLBAR_BTN_SMALL_W * 2 + TOOLBAR_SORT_COMBO_W
-        + TOOLBAR_GAP * 3 + TOOLBAR_RIGHT_MARGIN;
+        + TOOLBAR_GAP * 3 + TOOLBAR_GROUP_GAP + TOOLBAR_RIGHT_MARGIN;
     combo_w = parent_width - right_fixed - TOOLBAR_LEFT_MARGIN;
     if (combo_w < TOOLBAR_COMBO_MIN_W) {
         combo_w = TOOLBAR_COMBO_MIN_W;
