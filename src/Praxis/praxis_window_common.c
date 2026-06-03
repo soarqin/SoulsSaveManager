@@ -21,6 +21,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include "ui_layout.h"
 
 void log_write(const wchar_t *msg) {
     DWORD written;
@@ -159,7 +160,10 @@ void layout_main_window(WPARAM wp, LPARAM lp) {
     if (!tree_hwnd) return;
     tree_h = bottom_y - top_h;
     if (tree_h < 0) tree_h = 0;
-    MoveWindow(tree_hwnd, 0, top_h, client_width, tree_h, TRUE);
+
+    /* Add left/right margin to the tree view */
+    MoveWindow(tree_hwnd, UI_MARGIN, top_h,
+               client_width - UI_MARGIN * 2, tree_h, TRUE);
 }
 
 void register_hotkeys(HWND hwnd) {
