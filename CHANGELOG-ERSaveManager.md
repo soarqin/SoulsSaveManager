@@ -8,12 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- `docs/DS3SaveFormatResearch.md` Steam ID width corrected from 16 bytes to 8 bytes (was a documentation error)
 - ERSaveManager: Source files relocated to `src/ERSaveManager/` subdirectory (no behavior change)
-- Repository: Shared `src/common/` static library extracted (ersave, save_compress, file_dialog, locale_core, config_core)
-
-### Build
-- `ersave_common` static library now links `bcrypt` (Windows CNG) PUBLIC for AES-128-CBC used by DS3 save handling
 
 ## [1.0.0] - 2026-04-04
 
