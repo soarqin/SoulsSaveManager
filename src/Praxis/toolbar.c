@@ -28,7 +28,7 @@
 #define TOOLBAR_BOTTOM_HEIGHT    38     /* slightly taller to accommodate larger buttons */
 #define TOOLBAR_CTRL_HEIGHT      22
 #define TOOLBAR_BTN_LARGE_HEIGHT 28     /* taller buttons in bottom toolbar */
-#define TOOLBAR_CTRL_Y           4
+#define TOOLBAR_CTRL_Y           ((TOOLBAR_TOP_HEIGHT - TOOLBAR_CTRL_HEIGHT) / 2)
 #define TOOLBAR_BTN_LARGE_Y      5      /* center 28px button in 38px container */
 
 /* Replaced margins/gaps — now sourced from ui_layout.h */
@@ -259,8 +259,8 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
     t->combo = CreateWindowExW(
         0,
         WC_COMBOBOXW, NULL,
-        CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-        TOOLBAR_LEFT_MARGIN, TOOLBAR_CTRL_Y, 240, 200,
+        CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER,
+        TOOLBAR_LEFT_MARGIN, TOOLBAR_CTRL_Y, 240, 100,
         t->hwnd_top, (HMENU)(uintptr_t)IDC_PROFILE_COMBO, hinst, NULL);
 
     /* "+" — add backup profile */
@@ -285,10 +285,10 @@ toolbar_t *toolbar_create(HWND parent, HINSTANCE hinst) {
     t->combo_sort = CreateWindowExW(
         0,
         WC_COMBOBOXW, NULL,
-        CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+        CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL | WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_BORDER,
         TOOLBAR_LEFT_MARGIN + 240 + TOOLBAR_GAP + TOOLBAR_BTN_SMALL_W * 2 + TOOLBAR_GAP * 2
             + TOOLBAR_GROUP_GAP, TOOLBAR_CTRL_Y,
-        TOOLBAR_SORT_COMBO_W, 200,
+        TOOLBAR_SORT_COMBO_W, 100,
         t->hwnd_top, (HMENU)(uintptr_t)IDC_SORT_COMBO, hinst, NULL);
 
     /* --- Bottom container children: 5 action buttons --- */
@@ -408,7 +408,7 @@ void toolbar_layout_top(toolbar_t *t, int parent_width) {
     x += TOOLBAR_BTN_SMALL_W + TOOLBAR_GAP;
 
     MoveWindow(t->btn_del, x, TOOLBAR_CTRL_Y, TOOLBAR_BTN_SMALL_W, TOOLBAR_CTRL_HEIGHT, TRUE);
-    x += TOOLBAR_BTN_SMALL_W + TOOLBAR_GAP;
+    x += TOOLBAR_BTN_SMALL_W + TOOLBAR_GROUP_GAP;
 
     MoveWindow(t->combo_sort, x, TOOLBAR_CTRL_Y, TOOLBAR_SORT_COMBO_W, TOOLBAR_CTRL_HEIGHT, TRUE);
 
