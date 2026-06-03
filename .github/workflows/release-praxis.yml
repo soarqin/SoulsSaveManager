@@ -1,0 +1,69 @@
+name: Release Praxis
+
+on:
+  push:
+    tags:
+      - "praxis-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#praxis-v}"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" == *-* ]]; then
+            echo "PRERELEASE=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "PRERELEASE=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract changelog
+        id: changelog
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          {
+            echo "BODY<<CHANGELOG_EOF"
+            awk -v ver="$VERSION" '
+              /^## \[/ { if (found) exit; if (index($0, "[" ver "]")) { found=1; next } }
+              found { print }
+            ' CHANGELOG-Praxis.md
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Configure CMake
+        run: cmake -S . -B build -G "Visual Studio 17 2022" -T v142 -A x64 -DRELEASE_USE_STATIC_CRT=OFF
+
+      - name: Build
+        run: cmake --build build --config MinSizeRel --target praxis
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir release
+          cp build/bin/Praxis.exe release/
+          cp README.md LICENSE release/
+          cp CHANGELOG-Praxis.md release/CHANGELOG.md
+
+      - name: Create archive
+        shell: pwsh
+        run: Compress-Archive -Path release/* -DestinationPath "Praxis-${{ steps.version.outputs.VERSION }}.zip"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Praxis v${{ steps.version.outputs.VERSION }}
+          body: ${{ steps.changelog.outputs.BODY }}
+          prerelease: ${{ steps.version.outputs.PRERELEASE }}
+          files: Praxis-${{ steps.version.outputs.VERSION }}.zip
