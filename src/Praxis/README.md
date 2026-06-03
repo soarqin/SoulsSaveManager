@@ -1,71 +1,121 @@
 # Praxis
 
-Praxis is a practice save tool for Elden Ring, Dark Souls III, Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, and Sekiro: Shadows Die Twice that allows you to quickly backup and restore save files using global hotkeys. It features a tree-structured save library and automatic ring backups to ensure you never lose progress.
-
-## Features
-
-- **Full + Slot Backup/Restore** — Backup or restore the entire save file or just the currently active character slot.
-- **Global Hotkeys** — Perform backups and restores instantly from within the game.
-- **Tree-Structured Save Library** — Organize your saves in a hierarchical tree view. Rename, move, and delete saves with ease.
-- **Recycle Bin Support** — Deleted saves are moved to the Windows Recycle Bin.
-- **Ring Backup System** — Automatically maintains a 5-slot FIFO ring of backups every time you restore, allowing you to undo the last restore operation.
-- **Multi-Game Ready** — Designed with a backend interface to support multiple games (currently implements Elden Ring, Dark Souls III, Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, and Sekiro: Shadows Die Twice).
+Praxis is a Windows practice save tool for Elden Ring, Dark Souls III, Dark Souls Remastered, Dark Souls II: Scholar of the First Sin, and Sekiro: Shadows Die Twice. It creates organized backup libraries and restores full saves or active character slots with toolbar actions and global hotkeys.
 
 ## Supported Games
 
-| Game | Save File | Save Folder |
-|------|-----------|-------------|
-| Elden Ring | ER0000.sl2 | %APPDATA%\EldenRing\<decimal_steamid>\ |
-| Dark Souls III | DS30000.sl2 | %APPDATA%\DarkSoulsIII\<hex16>\ |
-| Dark Souls Remastered | DRAKS0005.sl2 | Documents\NBGI\DARK SOULS REMASTERED\<decimal_lower32>\ |
-| Dark Souls II: Scholar of the First Sin | DS2SOFS0000.sl2 | %APPDATA%\DarkSoulsII\<hex16>\ |
-| Sekiro: Shadows Die Twice | S0000.sl2 | %APPDATA%\Sekiro\<decimal_steamid>\ |
+| Game | Save file | Backup extension |
+|------|-----------|------------------|
+| Elden Ring | `ER0000.sl2` | `.ersm` |
+| Dark Souls III | `DS30000.sl2` | `.ds3sm` |
+| Dark Souls Remastered | `DRAKS0005.sl2` | `.dsrsave` |
+| Dark Souls II: Scholar of the First Sin | `DS2SOFS0000.sl2` | `.ds2save` |
+| Sekiro: Shadows Die Twice | `S0000.sl2` | `.seksave` |
+
+## Features
+
+- Back up and restore full save files.
+- Back up and restore the currently active character slot.
+- Use global hotkeys while the game is focused.
+- Keep separate game profiles for different games, accounts, installs, or save files.
+- Keep multiple backup profiles under one game profile, each with its own named backup tree and compression level.
+- Organize backups in a tree view with folders, sorting, rename, delete, and Show in File Explorer.
+- Mark backup files read-only so they cannot be overwritten by Backup & Replace.
+- Import existing full-save and slot-backup files into the active backup tree.
+- Create a hidden `.praxis_ring/` pre-restore snapshot before restores, then undo the last restore if needed.
+- Use System, Light, or Dark theme mode.
+- Use the UI in 11 languages with automatic system language detection.
+
+## Before You Use It
+
+Close the game before restoring a backup. Praxis also shows this warning in the app because restoring while the game is writing the save can lose data.
+
+Keep a normal manual backup of important save folders. Praxis creates safety snapshots before restores, but practice-save workflows intentionally overwrite live save files.
+
+## Quick Start
+
+1. Launch `Praxis.exe`.
+2. Open **Game > Manage Game Profiles...**.
+3. Add a game profile, choose the game, and set **Backup Root** to the folder where practice backups should live.
+4. Set **Save File** only when auto-detection does not find the right save file or when you want to target a specific file.
+5. Use the `+` button in the toolbar to add a backup profile. Its name becomes a subfolder under the game profile's backup root.
+6. Select a backup profile from the toolbar dropdown.
+7. Use the tree view to create or select the folder where new backups should be placed.
+
+## Common Workflows
+
+### Back Up the Current Save
+
+Click **Backup Full Save** or press `Ctrl+Shift+F5`. Praxis creates a timestamped backup in the selected tree folder.
+
+### Back Up the Active Character Slot
+
+Load the character in game, then click **Backup Current Slot** or press `Ctrl+Shift+F6`. Praxis detects the active slot and writes a slot backup.
+
+### Replace an Existing Backup
+
+Select a backup file in the tree, then click **Backup & Replace** or press `Ctrl+Shift+F7`. Praxis overwrites that backup with the current full save or current active slot, matching the selected backup type.
+
+Read-only backup files cannot be replaced. Right-click a file and use **Make read-only** or **Make writable** to change that lock.
+
+### Restore a Backup
+
+Select a backup file, then click **Restore** or press `Ctrl+Shift+F9`. Praxis detects whether the selected file is a full-save backup or a slot backup and restores it to the active game profile's save file.
+
+Before the restore, Praxis writes a snapshot of the current live save into `.praxis_ring/` under the active backup profile folder.
+
+### Undo the Last Restore
+
+Click **Undo Last Restore** or press `Ctrl+Shift+Z`. Praxis restores the most recent `.praxis_ring/` snapshot.
+
+### Move Through Nearby Saves
+
+Use `Ctrl+Shift+Up` and `Ctrl+Shift+Down` to select the previous or next backup file in the current directory, using the current sort mode.
+
+### Import Existing Backups
+
+Use **File > Import as Original Format...** to import detected full-save backups as full saves and detected slot backups as slots.
+
+Use **File > Import as Single Slot...** to import slot backups as slots and to extract the active character slot from detected full-save backups.
 
 ## Default Hotkeys
 
-| Action | Default Hotkey |
-|--------|---------------|
-| Backup Full Save | Ctrl+Shift+F5 |
-| Backup Current Slot | Ctrl+Shift+F6 |
-| Backup & Replace Selected Save | Ctrl+Shift+F7 |
-| Restore (auto-detect full or slot) | Ctrl+Shift+F9 |
-| Undo Last Restore | Ctrl+Shift+Z |
-| Previous Save in Directory | Ctrl+Shift+Up |
-| Next Save in Directory | Ctrl+Shift+Down |
+| Action | Default hotkey |
+|--------|----------------|
+| Backup Full Save | `Ctrl+Shift+F5` |
+| Backup Current Slot | `Ctrl+Shift+F6` |
+| Backup & Replace Selected Save | `Ctrl+Shift+F7` |
+| Restore | `Ctrl+Shift+F9` |
+| Undo Last Restore | `Ctrl+Shift+Z` |
+| Previous Save in Directory | `Ctrl+Shift+Up` |
+| Next Save in Directory | `Ctrl+Shift+Down` |
 
-## Tree Storage
+Change hotkeys from **Options > Hotkey Settings...**.
 
-Saves are stored in a tree structure on disk, mirroring the organization in the UI. This allows for easy management and categorization of practice states.
+## Backup Tree
 
-## Ring Backup
+The backup tree mirrors folders and files on disk. Use the right-click menu to create folders, rename items, move files to the Recycle Bin, toggle read-only, or open a location in File Explorer.
 
-The Ring Backup system (located in the `.praxis_ring/` hidden directory) automatically captures the state of your save file before any restore operation. If you accidentally restore the wrong save, you can use the Undo command to revert to the previous state.
-
-## Build & Run
-
-Refer to the root [README.md](../../README.md) for build instructions. Once built, launch `Praxis.exe`.
-
-## Backend Interface
-
-Praxis uses a compile-time vtable (`game_backend_t`) defined in `src/Praxis/game_backend.h`. This allows the core logic to remain game-agnostic while specific backends (like `er_backend.c` for Elden Ring, `ds3_backend.c` for Dark Souls III, `dsr_backend.c` for Dark Souls Remastered, `ds2_backend.c` for Dark Souls II: Scholar of the First Sin, and `sekiro_backend.c` for Sekiro: Shadows Die Twice) handle the details of save file locations and slot manipulation.
+The sort dropdown can order files by name or modified time, ascending or descending.
 
 ## Profiles
 
-Praxis 2.0 introduces a multi-profile system:
+A game profile defines the game, the optional exact save file, and a backup root folder.
 
-- **Game Profiles** — One entry per game/account combination. Each game profile has a name, game type, optional override for the save file, and a backup root directory.
-- **Backup Profiles** — Subordinate to a game profile. Each backup profile defines a tree root directory and compression level. You can have multiple backup profiles per game (e.g., `Main`, `SpeedrunPractice`, `PvP`).
+A backup profile belongs to one game profile. Its folder is created as:
 
-### Profile Hierarchy
-
-```
-Game Profile: "Elden Ring - Main Account"
-└── Backup Profile: "Main"    → C:\Backups\ER-Main\
-└── Backup Profile: "Route B" → C:\Backups\ER-Main\RouteB\
+```text
+<Backup Root>\<Backup Profile Name>\
 ```
 
-Profiles are managed via the **Game** menu → **Manage Game Profiles** (for game profiles) or the `+` / `−` buttons on the toolbar (for backup profiles).
+Example:
 
-## Migration
+```text
+C:\PraxisBackups\Elden Ring Main\Boss Practice\
+```
 
-If you are upgrading from a previous version of Praxis, a one-time migration wizard will automatically launch on first run. It will convert your existing `[Settings].TreeRoot` configuration into a game/backup profile pair, preserving all existing backup files in place.
+Use separate game profiles for different games, different Steam accounts, or different modded save locations. Use separate backup profiles for routes, bosses, categories, or practice sessions.
+
+## Existing Configurations
+
+If Praxis finds an older single-tree configuration, it opens a one-time migration wizard. The wizard converts the old tree root into a game profile and backup profile while preserving the existing backup files in place.

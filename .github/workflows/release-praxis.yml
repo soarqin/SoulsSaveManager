@@ -53,7 +53,8 @@ jobs:
         run: |
           mkdir release
           cp build/bin/Praxis.exe release/
-          cp README.md LICENSE release/
+          cp src/Praxis/README.md release/README.md
+          cp LICENSE release/
           cp CHANGELOG-Praxis.md release/CHANGELOG.md
 
       - name: Create archive

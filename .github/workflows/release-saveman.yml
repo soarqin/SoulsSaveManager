@@ -53,7 +53,8 @@ jobs:
         run: |
           mkdir release
           cp build/bin/ERSaveManager.exe release/
-          cp README.md LICENSE release/
+          cp src/ERSaveManager/README.md release/README.md
+          cp LICENSE release/
           cp CHANGELOG-ERSaveManager.md release/CHANGELOG.md
 
       - name: Create archive
