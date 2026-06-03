@@ -602,10 +602,10 @@ INT_PTR theme_core_dlg_ctlcolor(HDC hdc, UINT msg) {
 }
 
 bool theme_core_on_erasebkgnd(HWND hwnd, HDC hdc) {
-    if (!g_is_dark || !hwnd || !hdc) return false;
+    if (!hwnd || !hdc) return false;
     RECT rc;
     GetClientRect(hwnd, &rc);
-    FillRect(hdc, &rc, g_dark_palette.brush_dlg_bg);
+    FillRect(hdc, &rc, theme_core_palette()->brush_dlg_bg);
     return true;
 }
 

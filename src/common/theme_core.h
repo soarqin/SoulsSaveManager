@@ -223,10 +223,10 @@ void theme_core_paint_uah_menu_underline(HWND hwnd);
 /* === Erase background helper === */
 
 /**
- * @brief WM_ERASEBKGND helper. Fills the client area with the dark dialog
- *        brush when dark mode is active.
- * @return true if the message was handled (caller must return 1); false to
- *         let the default handler run (light mode).
+ * @brief WM_ERASEBKGND helper. Fills the client area with the active palette's
+ *        dialog background brush (dark or light).
+ * @return true if the message was handled (caller must return 1); false only
+ *         if hwnd or hdc is NULL.
  */
 bool theme_core_on_erasebkgnd(HWND hwnd, HDC hdc);
 
