@@ -568,7 +568,7 @@ void theme_core_apply_to_window_and_children(HWND hwnd) {
     }
     EnumChildWindows(hwnd, theme_child_proc, 0);
     RedrawWindow(hwnd, NULL, NULL,
-                 RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_FRAME);
+                 RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW | RDW_FRAME);
 }
 
 /* ============================================================================
