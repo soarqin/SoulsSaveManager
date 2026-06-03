@@ -37,15 +37,15 @@ END
 IDI_APP_ICON ICON "app.ico"
 
 /* Rename character dialog */
-IDD_RENAME_CHARACTER DIALOG 0, 0, 200, 75
+IDD_RENAME_CHARACTER DIALOG 0, 0, 200, 80
 STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Rename Character"
 FONT 9, "MS Shell Dlg"
 BEGIN
-    LTEXT           "Enter new character name:", IDC_STATIC_CHARACTER_NAME, 10, 10, 180, 8
-    EDITTEXT        IDC_EDIT_CHARACTER_NAME, 10, 25, 180, 14, ES_AUTOHSCROLL
-    DEFPUSHBUTTON   "Confirm", IDOK, 80, 50, 50, 14
-    PUSHBUTTON      "Cancel", IDCANCEL, 140, 50, 50, 14
+    LTEXT           "Enter new character name:", IDC_STATIC_CHARACTER_NAME, 12, 12, 176, 8
+    EDITTEXT        IDC_EDIT_CHARACTER_NAME, 12, 24, 176, 14, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "Confirm", IDOK, 80, 54, 50, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 138, 54, 50, 14
 END
 
 /* Face data management dialog (resizable, content created programmatically) */

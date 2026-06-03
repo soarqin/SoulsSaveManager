@@ -766,6 +766,13 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             return 0;
         }
 
+        case WM_GETMINMAXINFO: {
+            MINMAXINFO *mmi = (MINMAXINFO *)lparam;
+            mmi->ptMinTrackSize.x = 600;
+            mmi->ptMinTrackSize.y = 400;
+            return 0;
+        }
+
         case WM_DESTROY:
             /* Save configuration before exiting */
             save_config();
