@@ -39,6 +39,7 @@ ERSaveManager/
     │   └── CMakeLists.txt
     ├── ERSaveManager/      # src/ERSaveManager: ERSaveManager executable sources
     │   ├── theme.c/h       # Per-app dark/light theme glue module
+    │   ├── embedded_regulation_1_02_1.c/h  # Built-in 1.02.1 regulation.bin for the Downpatch to 1.02.1 command
     │   └── CMakeLists.txt
     └── Praxis/             # src/Praxis: Praxis executable sources
         ├── CMakeLists.txt

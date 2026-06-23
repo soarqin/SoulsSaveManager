@@ -78,6 +78,11 @@ typedef enum locale_string_index_e {
     STR_THEME_SYSTEM,       /* "System" */
     STR_THEME_LIGHT,        /* "Light" */
     STR_THEME_DARK,         /* "Dark" */
+    STR_TOOLS,              /* "Tools" */
+    STR_DOWNPATCH_1_02_1,   /* "Downpatch to 1.02.1" */
+    STR_DOWNPATCH_NO_SAVE,  /* "No save file loaded" */
+    STR_DOWNPATCH_SUCCESS,  /* "Save downpatched to 1.02.1" */
+    STR_DOWNPATCH_FAILED,   /* "Failed to downpatch save" */
     STR_MAX /* Total number of strings */
 } locale_string_index_t;
 

@@ -95,6 +95,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"System",
         L"Light",
         L"Dark",
+        L"Tools",
+        L"Downpatch to 1.02.1",
+        L"No save file loaded",
+        L"Save downpatched to 1.02.1",
+        L"Failed to downpatch save",
     },
     /* French strings */
     {
@@ -163,6 +168,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"Système",
         L"Clair",
         L"Sombre",
+        L"Outils",
+        L"Rétrograder vers 1.02.1",
+        L"Aucun fichier de sauvegarde chargé",
+        L"Sauvegarde rétrogradée vers 1.02.1",
+        L"Échec du rétrogradage de la sauvegarde",
     },
     /* German strings */
     {
@@ -231,6 +241,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"System",
         L"Hell",
         L"Dunkel",
+        L"Werkzeuge",
+        L"Auf 1.02.1 downpatchen",
+        L"Keine Speicherdatei geladen",
+        L"Speicherstand auf 1.02.1 downgepatchet",
+        L"Downpatchen des Speicherstands fehlgeschlagen",
     },
     /* Italian strings */
     {
@@ -299,6 +314,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"Sistema",
         L"Chiaro",
         L"Scuro",
+        L"Strumenti",
+        L"Downpatch a 1.02.1",
+        L"Nessun file di salvataggio caricato",
+        L"Salvataggio downpatched a 1.02.1",
+        L"Downpatch del salvataggio non riuscito",
     },
     /* Spanish strings */
     {
@@ -367,6 +387,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"Sistema",
         L"Claro",
         L"Oscuro",
+        L"Herramientas",
+        L"Downpatch a 1.02.1",
+        L"No hay archivo de guardado cargado",
+        L"Guardado downpatcheado a 1.02.1",
+        L"Error al downpatchear el guardado",
     },
     /* Portuguese strings */
     {
@@ -435,6 +460,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"Sistema",
         L"Claro",
         L"Escuro",
+        L"Ferramentas",
+        L"Downpatch para 1.02.1",
+        L"Nenhum arquivo de save carregado",
+        L"Save downpatchado para 1.02.1",
+        L"Falha ao downpatchar o save",
     },
     /* Russian strings */
     {
@@ -503,6 +533,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"Системная",
         L"Светлая",
         L"Тёмная",
+        L"Инструменты",
+        L"Откатить к 1.02.1",
+        L"Файл сохранения не загружен",
+        L"Сохранение откачено к 1.02.1",
+        L"Не удалось откатить сохранение",
     },
     /* Japanese strings */
     {
@@ -571,6 +606,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"システム",
         L"ライト",
         L"ダーク",
+        L"ツール",
+        L"1.02.1へダウンパッチ",
+        L"セーブファイルが読み込まれていません",
+        L"セーブを1.02.1へダウンパッチしました",
+        L"セーブのダウンパッチに失敗しました",
     },
     /* Korean strings */
     {
@@ -639,6 +679,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"시스템",
         L"라이트",
         L"다크",
+        L"도구",
+        L"1.02.1로 다운패치",
+        L"세이브 파일이 로드되지 않았습니다",
+        L"세이브를 1.02.1로 다운패치했습니다",
+        L"세이브 다운패치 실패",
     },
     /* Simplified Chinese strings */
     {
@@ -707,6 +752,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"跟随系统",
         L"浅色",
         L"深色",
+        L"工具",
+        L"降级到 1.02.1",
+        L"未加载存档文件",
+        L"存档已降级到 1.02.1",
+        L"降级存档失败",
     },
     /* Traditional Chinese strings */
     {
@@ -775,6 +825,11 @@ static const wchar_t *locale_strings[11][STR_MAX] = {
         L"跟隨系統",
         L"淺色",
         L"深色",
+        L"工具",
+        L"降級到 1.02.1",
+        L"未載入存檔檔案",
+        L"存檔已降級到 1.02.1",
+        L"降級存檔失敗",
     }
 };
 

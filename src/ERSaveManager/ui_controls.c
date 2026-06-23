@@ -375,6 +375,12 @@ void ui_create_controls(HWND hwnd, HMODULE module) {
     SetMenu(hwnd, menu_bar);
     compression_submenu_handle = compression_submenu;
 
+    /* Create Tools menu */
+    HMENU tools_menu = CreatePopupMenu();
+    AppendMenuW(tools_menu, MF_STRING, IDM_TOOLS_DOWNPATCH_1_02_1, locale_str(STR_DOWNPATCH_1_02_1));
+    AppendMenuW(menu_bar, MF_POPUP, (UINT_PTR)tools_menu, locale_str(STR_TOOLS));
+    SetMenu(hwnd, menu_bar);
+
     /* Suppress the check-mark gutter: the Options menu has no checkable/icon items */
     {
         MENUINFO mi;
@@ -601,6 +607,16 @@ void ui_refresh_language(void) {
             ModifyMenuW(options_menu, 1, MF_BYPOSITION | MF_POPUP,
                 (UINT_PTR)GetSubMenu(options_menu, 1), locale_str(STR_THEME));
         }
+        DrawMenuBar(main_window);
+    }
+
+    /* Refresh Tools menu (index 2 = Tools, after Language and Options) */
+    HMENU tools_menu = GetSubMenu(menu_bar, 2);
+    if (tools_menu) {
+        ModifyMenuW(tools_menu, IDM_TOOLS_DOWNPATCH_1_02_1, MF_BYCOMMAND | MF_STRING,
+            IDM_TOOLS_DOWNPATCH_1_02_1, locale_str(STR_DOWNPATCH_1_02_1));
+        ModifyMenuW(menu_bar, 2, MF_BYPOSITION | MF_POPUP,
+            (UINT_PTR)tools_menu, locale_str(STR_TOOLS));
         DrawMenuBar(main_window);
     }
 

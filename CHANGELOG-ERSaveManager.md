@@ -7,8 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Tools → Downpatch to 1.02.1 menu command. Writes game version `0x0B` to the
+  summary slot, regulation version `0x9BCAF6` and the built-in 1.02.1
+  `regulation.bin` to the regulation slot (BND4 entry 11), then recomputes
+  slot MD5 checksums. The 1.02.1 `regulation.bin` is embedded in the binary.
+- System, Light, and Dark theme modes with a theme submenu under Options and
+  per-app theme glue module.
+- High-contrast support, `WM_SYSCOLORCHANGE` handler, and button hover/press
+  states for the theme system.
+- Minimum window size constraint and unified main window / dialog margins and
+  spacing.
+- `--selftest` subcommands for diagnosis and CI: `make-bnd4-stub`,
+  `make-min-valid-sl2`, `provision-save-folder`, `dump-active-slot`,
+  `write-active-slot`, `downpatch-1-02-1`, and several compression / format
+  detection helpers.
+
 ### Changed
-- ERSaveManager: Source files relocated to `src/ERSaveManager/` subdirectory (no behavior change)
+- Source files relocated to `src/ERSaveManager/` subdirectory (no behavior
+  change).
+- Shared modules (`ersave`, `save_compress`, `file_dialog`, `locale_core`,
+  `config_core`, `theme_core`) extracted into `src/common` as a static library
+  consumed by both ERSaveManager and Praxis.
+
+### Fixed
+- COM initialized in the main thread so `IFileDialog` folder pickers work
+  reliably.
+- Null guards and bounds checks across the public `ersave` API.
+- Background erase forced on theme change redraw; listview column-resize ghost
+  lines eliminated via double-buffering.
 
 ## [1.0.0] - 2026-04-04
 

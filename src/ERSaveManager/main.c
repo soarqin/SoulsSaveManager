@@ -8,6 +8,7 @@
 #include "theme_core.h"
 
 #include "embedded_face_data.h"
+#include "embedded_regulation_1_02_1.h"
 #include "face_dialog.h"
 #include "file_dialog.h"
 #include "ui_controls.h"
@@ -208,6 +209,37 @@ static void on_menu_change_compression(int id) {
         }
     }
     ui_update_compression_menu();
+}
+
+static void on_menu_downpatch_1_02_1(HWND hwnd) {
+    if (!save_data) {
+        MessageBoxW(hwnd, locale_str(STR_DOWNPATCH_NO_SAVE), locale_str(STR_ERROR), MB_OK | MB_ICONWARNING);
+        return;
+    }
+    const wchar_t *path = NULL;
+    /* er_save_data_load stores the path; we cannot peek the private field, so
+       re-derive it from the current save folder selection like handle_save_folder_selection. */
+    wchar_t save_path[MAX_PATH];
+    lstrcpyW(save_path, config.save_path);
+    PathAppendW(save_path, config.save_subfolder);
+    PathAppendW(save_path, L"\\ER0000.sl2");
+    if (GetFileAttributesW(save_path) == INVALID_FILE_ATTRIBUTES) {
+        MessageBoxW(hwnd, locale_str(STR_DOWNPATCH_NO_SAVE), locale_str(STR_ERROR), MB_OK | MB_ICONWARNING);
+        return;
+    }
+    path = save_path;
+
+    if (er_save_downpatch_to_1_02_1(path, embedded_regulation_1_02_1, embedded_regulation_1_02_1_size)) {
+        /* Reload the in-memory save so subsequent operations see the new state. */
+        er_save_data_t *new_save = er_save_data_load(path);
+        if (new_save) {
+            er_save_data_free(save_data);
+            save_data = new_save;
+        }
+        MessageBoxW(hwnd, locale_str(STR_DOWNPATCH_SUCCESS), locale_str(STR_SUCCESS), MB_OK | MB_ICONINFORMATION);
+    } else {
+        MessageBoxW(hwnd, locale_str(STR_DOWNPATCH_FAILED), locale_str(STR_ERROR), MB_OK | MB_ICONERROR);
+    }
 }
 
 static ersm_format_t detect_import_format(const wchar_t *path) {
@@ -759,6 +791,8 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                         on_menu_change_compression(id);
                     } else if (theme_is_menu_command(id)) {
                         theme_handle_menu_command(id);
+                    } else if (id == IDM_TOOLS_DOWNPATCH_1_02_1) {
+                        on_menu_downpatch_1_02_1(hwnd);
                     }
                     break;
                 }
@@ -1107,6 +1141,74 @@ static bool make_min_valid_sl2(const wchar_t *path, uint64_t user_id) {
     return ok;
 }
 
+/* Build a BND4 stub with a regulation slot large enough to hold the embedded
+ * 1.02.1 regulation.bin, then downpatch it and verify the save still loads. */
+static int selftest_downpatch_1_02_1(const wchar_t *path) {
+    const uint32_t char_slot_size    = 0x280010u;
+    const uint32_t summary_slot_size = 0x60010u;
+    const uint32_t reg_slot_size     = 0x10u + 0x10u + embedded_regulation_1_02_1_size; /* MD5 + header + body */
+    const uint32_t slot0_offset      = 0x300u;
+    const uint32_t summary_data_size = 0x60000u;
+    const uint32_t face_section_size = 0x11D0u;
+
+    const uint32_t summary_offset = slot0_offset + 10u * char_slot_size;
+    const uint32_t reg_offset     = summary_offset + summary_slot_size;
+    const uint32_t total_size     = reg_offset + reg_slot_size;
+    const uint32_t summary_layout_size = face_section_size + 0x14u;
+
+    uint8_t *file_data = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, total_size);
+    if (!file_data) {
+        st_printf(L"downpatch-1-02-1: alloc failed\n");
+        return 1;
+    }
+
+    CopyMemory(file_data, "BND4", 4);
+    *(uint32_t *)(file_data + 0x0C) = 12u;
+    for (int i = 0; i < 10; i++) {
+        *(uint32_t *)(file_data + 0x48 + i * 0x20) = char_slot_size;
+        *(uint32_t *)(file_data + 0x50 + i * 0x20) = slot0_offset + (uint32_t)i * char_slot_size;
+    }
+    *(uint32_t *)(file_data + 0x48 + 10 * 0x20) = summary_slot_size;
+    *(uint32_t *)(file_data + 0x50 + 10 * 0x20) = summary_offset;
+    *(uint32_t *)(file_data + 0x48 + 11 * 0x20) = reg_slot_size;
+    *(uint32_t *)(file_data + 0x50 + 11 * 0x20) = reg_offset;
+
+    uint8_t *summary_payload = file_data + summary_offset + 0x10;
+    *(uint64_t *)(summary_payload + 0x04) = 76561199999999999ULL;
+    *(uint32_t *)(summary_payload + 0x150) = summary_layout_size;
+    *(uint32_t *)(summary_payload + 0x158) = face_section_size;
+    md5_buffer(summary_payload, summary_data_size, file_data + summary_offset);
+
+    HANDLE f = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (f == INVALID_HANDLE_VALUE) {
+        LocalFree(file_data);
+        st_printf(L"downpatch-1-02-1: create failed\n");
+        return 1;
+    }
+    DWORD written;
+    bool ok = WriteFile(f, file_data, total_size, &written, NULL) && written == total_size;
+    CloseHandle(f);
+    LocalFree(file_data);
+    if (!ok) {
+        st_printf(L"downpatch-1-02-1: write failed\n");
+        return 1;
+    }
+
+    if (!er_save_downpatch_to_1_02_1(path, embedded_regulation_1_02_1, embedded_regulation_1_02_1_size)) {
+        st_printf(L"downpatch-1-02-1: downpatch failed\n");
+        return 1;
+    }
+
+    er_save_data_t *save = er_save_data_load(path);
+    if (!save) {
+        st_printf(L"downpatch-1-02-1: reload after downpatch failed\n");
+        return 1;
+    }
+    er_save_data_free(save);
+    st_printf(L"downpatch-1-02-1: ok\n");
+    return 0;
+}
+
 /* Compress an arbitrary source file as an ERSM FULL_SAVE container. */
 static int selftest_make_valid_ersm_fullsave(const wchar_t *src_path, const wchar_t *dst_path) {
     HANDLE f = CreateFileW(src_path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -1278,6 +1380,13 @@ static int run_selftest(LPWSTR cmd_line) {
             result = 2;
         } else {
             result = make_min_valid_sl2(argv[3], 76561199999999999ULL) ? 0 : 1;
+        }
+    } else if (wcscmp(sub, L"downpatch-1-02-1") == 0) {
+        if (argc < 4) {
+            st_printf(L"usage: --selftest downpatch-1-02-1 <sl2_path>\n");
+            result = 2;
+        } else {
+            result = selftest_downpatch_1_02_1(argv[3]);
         }
     } else if (wcscmp(sub, L"make-valid-ersm-fullsave") == 0) {
         if (argc < 5) {

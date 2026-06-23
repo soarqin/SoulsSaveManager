@@ -249,3 +249,17 @@ uint32_t er_save_debug_get_active_offset(const er_save_data_t *save);
  *        persists the update to persist_path. Returns true on success.
  */
 bool er_save_debug_set_active_slot_byte(er_save_data_t *save, uint8_t value, const wchar_t *persist_path);
+
+/**
+ * @brief Downpatches an Elden Ring save to version 1.02.1.
+ * @details Writes game version 0x0B to the summary slot, writes the regulation
+ *          version 0x9BCAF6 and the provided 1.02.1 regulation.bin body into the
+ *          regulation slot (BND4 entry 11), and recomputes slot MD5 checksums.
+ *          The regulation buffer must be at most (regulation_slot_size - 0x10)
+ *          bytes; remaining bytes are zero-padded. The file is modified in place.
+ * @param path Path to ER0000.sl2
+ * @param regulation_data Raw 1.02.1 regulation.bin bytes
+ * @param regulation_size Number of bytes in regulation_data
+ * @return true on success, false on read/write error or invalid save structure
+ */
+bool er_save_downpatch_to_1_02_1(const wchar_t *path, const uint8_t *regulation_data, uint32_t regulation_size);

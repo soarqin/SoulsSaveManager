@@ -757,6 +757,116 @@ bool er_save_debug_set_active_slot_byte(er_save_data_t *save, uint8_t value, con
     return ok;
 }
 
+bool er_save_downpatch_to_1_02_1(const wchar_t *path, const uint8_t *regulation_data, uint32_t regulation_size) {
+    if (!path || !regulation_data || regulation_size == 0) {
+        return false;
+    }
+    if (!path_fits_fixed_buffer(path)) {
+        return false;
+    }
+
+    HANDLE file = CreateFileW(path, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    uint8_t header[ER_FILE_HEADER_SIZE];
+    DWORD bytes_read;
+    if (!ReadFile(file, header, sizeof(header), &bytes_read, NULL) || bytes_read != sizeof(header)) {
+        CloseHandle(file);
+        return false;
+    }
+    if (RtlCompareMemory(header, "BND4", 4) != 4) {
+        CloseHandle(file);
+        return false;
+    }
+
+    int slot_count = *(int *)&header[ER_HEADER_SLOT_COUNT_OFFSET];
+    /* Need at least 12 slots: 10 char + 1 summary (index 10) + 1 regulation (index 11) */
+    if (slot_count < 12) {
+        CloseHandle(file);
+        return false;
+    }
+
+    uint32_t summary_slot_offset = *(uint32_t *)(&header[ER_HEADER_SLOT_OFFSET_BASE + 10 * ER_HEADER_SLOT_STRIDE]);
+    uint32_t regulation_slot_offset = *(uint32_t *)(&header[ER_HEADER_SLOT_OFFSET_BASE + 11 * ER_HEADER_SLOT_STRIDE]);
+    uint32_t regulation_slot_size = *(uint32_t *)(&header[ER_HEADER_SLOT_SIZE_BASE + 11 * ER_HEADER_SLOT_STRIDE]);
+
+    /* Regulation slot payload (after the 16-byte MD5 prefix) must hold a 16-byte
+     * header plus the regulation body. */
+    if (regulation_slot_size < ER_SLOT_HEADER_SIZE + 0x10 + regulation_size) {
+        CloseHandle(file);
+        return false;
+    }
+    if (regulation_slot_size > 0x400000u) {
+        CloseHandle(file);
+        return false;
+    }
+
+    uint8_t *reg_payload = LocalAlloc(LMEM_FIXED | LMEM_ZEROINIT, regulation_slot_size - ER_SLOT_HEADER_SIZE);
+    if (!reg_payload) {
+        CloseHandle(file);
+        return false;
+    }
+    uint32_t reg_payload_size = regulation_slot_size - ER_SLOT_HEADER_SIZE;
+
+    /* Read existing regulation payload to preserve any bytes we do not rewrite. */
+    if (SetFilePointer(file, regulation_slot_offset + ER_SLOT_HEADER_SIZE, NULL, FILE_BEGIN) != regulation_slot_offset + ER_SLOT_HEADER_SIZE) {
+        LocalFree(reg_payload);
+        CloseHandle(file);
+        return false;
+    }
+    if (!ReadFile(file, reg_payload, reg_payload_size, &bytes_read, NULL) || bytes_read != reg_payload_size) {
+        LocalFree(reg_payload);
+        CloseHandle(file);
+        return false;
+    }
+
+    /* Regulation header uint at payload offset 0x08 is the regulation version. */
+    *(uint32_t *)(reg_payload + 0x08) = 0x9BCAF6u;
+    /* Regulation body starts at payload offset 0x10. Zero-fill the rest, then copy. */
+    ZeroMemory(reg_payload + 0x10, reg_payload_size - 0x10);
+    CopyMemory(reg_payload + 0x10, regulation_data, regulation_size);
+
+    /* Recompute regulation slot MD5 over the payload and persist. */
+    uint8_t md5[0x10];
+    md5_buffer(reg_payload, reg_payload_size, md5);
+
+    bool ok = write_at(file, regulation_slot_offset, md5, sizeof(md5));
+    ok = ok && write_at(file, regulation_slot_offset + ER_SLOT_HEADER_SIZE, reg_payload, reg_payload_size);
+
+    /* Summary slot: write game version 0x0B at payload offset 0x00 and recompute MD5. */
+    if (ok) {
+        uint8_t *sum_payload = LocalAlloc(LMEM_FIXED, ER_SUMMARY_DATA_SIZE);
+        if (!sum_payload) {
+            LocalFree(reg_payload);
+            CloseHandle(file);
+            return false;
+        }
+        if (SetFilePointer(file, summary_slot_offset + ER_SLOT_HEADER_SIZE, NULL, FILE_BEGIN) != summary_slot_offset + ER_SLOT_HEADER_SIZE) {
+            LocalFree(sum_payload);
+            LocalFree(reg_payload);
+            CloseHandle(file);
+            return false;
+        }
+        if (!ReadFile(file, sum_payload, ER_SUMMARY_DATA_SIZE, &bytes_read, NULL) || bytes_read != ER_SUMMARY_DATA_SIZE) {
+            LocalFree(sum_payload);
+            LocalFree(reg_payload);
+            CloseHandle(file);
+            return false;
+        }
+        *(uint32_t *)(sum_payload + 0x00) = 0x0Bu;
+        md5_buffer(sum_payload, ER_SUMMARY_DATA_SIZE, md5);
+        ok = write_at(file, summary_slot_offset, md5, sizeof(md5));
+        ok = ok && write_at(file, summary_slot_offset + ER_SLOT_HEADER_SIZE, sum_payload, ER_SUMMARY_DATA_SIZE);
+        LocalFree(sum_payload);
+    }
+
+    LocalFree(reg_payload);
+    CloseHandle(file);
+    return ok;
+}
+
 const er_char_data_t *er_char_data_ref(const er_save_data_t *save_data, int slot) {
     if (!save_data) {
         return NULL;

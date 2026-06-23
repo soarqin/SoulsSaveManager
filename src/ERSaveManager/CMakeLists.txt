@@ -6,6 +6,8 @@ add_project(saveman WIN32
 
     embedded_face_data.c embedded_face_data.h
 
+    embedded_regulation_1_02_1.c embedded_regulation_1_02_1.h
+
     face_dialog.c face_dialog.h
 
     ui_controls.c ui_controls.h
